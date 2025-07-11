@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local SQLite (so cloud starts clean)
+daily_reports.db
+
+# OS files
+.DS_Store
+Thumbs.db
