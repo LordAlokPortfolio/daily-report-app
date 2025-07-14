@@ -1,69 +1,126 @@
-import streamlit as st
-import pandas as pd
-import sqlite3, io, json
-from datetime import datetime
-from fpdf import FPDF
+"""
+Streamlit Daily Report App for Simarjit Kaur
+-------------------------------------------
+Creates / reads a SQLite database of daily reports and
+lets the user generate weekly Excel + PDF summaries.
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import sqlite3
 import unicodedata
+from datetime import datetime
+from pathlib import Path
 
-DB_PATH = r"M:\ALOK\Daily Reports\daily_reports.db"
+import pandas as pd
+import streamlit as st
+from fpdf import FPDF
 
-# Ensure database and required columns are created fresh
-def init_db():
+# ------------------------------------------------------------------#
+#                             CONFIG                                #
+# ------------------------------------------------------------------#
+DB_PATH = Path(r"M:\ALOK\Daily Reports\daily_reports.db")
+
+# ------------------------------------------------------------------#
+#                    DATABASE INITIALISATION                        #
+# ------------------------------------------------------------------#
+
+
+def init_db() -> None:
+    """Create the `reports` table (if absent) and make sure the
+    `subtasks` column exists for legacy databases."""
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS reports(
-                date TEXT, day TEXT, name TEXT,
-                completed_tasks TEXT, incomplete_tasks TEXT,
-                organizing_details TEXT, notes TEXT,
-                subtasks TEXT
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS reports (
+                date               TEXT,
+                day                TEXT,
+                name               TEXT,
+                completed_tasks    TEXT,
+                incomplete_tasks   TEXT,
+                organizing_details TEXT,
+                notes              TEXT,
+                subtasks           TEXT
             )
-        """)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(reports)")
-        existing_columns = [col[1] for col in cursor.fetchall()]
-        if "subtasks" not in existing_columns:
-            cursor.execute("ALTER TABLE reports ADD COLUMN subtasks TEXT")
+            """
+        )
+        existing_cols = [
+            col[1] for col in conn.execute("PRAGMA table_info(reports)")
+        ]
+        if "subtasks" not in existing_cols:
+            conn.execute("ALTER TABLE reports ADD COLUMN subtasks TEXT")
+
+
 init_db()
 
-def clean_text(text):
+# ------------------------------------------------------------------#
+#                         HELPER FUNCTIONS                          #
+# ------------------------------------------------------------------#
+
+
+def clean_text(text: str | None) -> str:
+    """Strip non-ASCII characters for PDF output."""
     if not isinstance(text, str):
         return ""
     text = unicodedata.normalize("NFKD", text)
     return text.encode("ascii", "ignore").decode("ascii")
 
-# === PDF GENERATOR (pretty layout) ===
-def generate_pdf(df, week_no):
+
+def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
+    """Generate a pretty PDF summary for the selected week."""
     pdf = FPDF()
     pdf.add_page()
 
-    # --- Title ---
+    # Title
     pdf.set_font("Arial", style="B", size=14)
-    pdf.cell(0, 10, clean_text(f"Simarjit Kaur – Weekly Report (Week {week_no})"),
-             ln=True, align="C")
+    pdf.cell(
+        0,
+        10,
+        clean_text(f"Simarjit Kaur – Weekly Report (Week {week_no})"),
+        ln=True,
+        align="C",
+    )
     pdf.ln(5)
 
-    # --- Each day’s entry ---
-    for _, r in df.iterrows():
-        # Header line (date & day)
+    # One section per day
+    for _, row in df.iterrows():
         pdf.set_font("Arial", style="B", size=11)
-        pdf.cell(0, 8, clean_text(f"📅 {r['date']}  ({r['Day']})"), ln=True)
+        pdf.cell(0, 8, clean_text(f"📅 {row['date']}  ({row['Day']})"), ln=True)
 
-        # Body text
+        # Try to pretty-print subtasks JSON
+        try:
+            subs_dict = json.loads(row.get("subtasks", "{}"))
+            if isinstance(subs_dict, dict) and subs_dict:
+                subs_text = "\n".join(
+                    f"• {task}:\n    - " + "\n    - ".join(items)
+                    for task, items in subs_dict.items()
+                )
+            else:
+                subs_text = "—"
+        except Exception:
+            subs_text = "—"
+
         pdf.set_font("Arial", size=10)
-        pdf.multi_cell(0, 6, clean_text(
-            f"✅ Completed Tasks:\n{r['completed_tasks'] or '—'}\n\n"
-            f"❌ Incomplete Tasks:\n{r['incomplete_tasks'] or '—'}\n\n"
-            f"🧹 Organizing Details:\n{r['organizing_details'] or '—'}\n\n"
-            f"📌 Sub-Tasks:\n{r.get('subtasks','—') or '—'}\n\n"
-            f"🗒️ Notes:\n{r['notes'] or '—'}"
-        ))
+        pdf.multi_cell(
+            0,
+            6,
+            clean_text(
+                f"✅ Completed Tasks:\n{row['completed_tasks'] or '—'}\n\n"
+                f"❌ Incomplete Tasks:\n{row['incomplete_tasks'] or '—'}\n\n"
+                f"🧹 Organizing Details:\n{row['organizing_details'] or '—'}\n\n"
+                f"📋 Sub-Tasks:\n{subs_text}\n\n"
+                f"🗒️ Notes:\n{row['notes'] or '—'}"
+            ),
+        )
 
         # Divider
         pdf.ln(1)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(3)
 
-    # --- Page footer ---
+    # Footer
     pdf.set_y(-15)
     pdf.set_font("Arial", "I", 8)
     pdf.cell(0, 10, f"Page {pdf.page_no()}", 0, 0, "C")
@@ -71,114 +128,197 @@ def generate_pdf(df, week_no):
     return pdf.output(dest="S").encode("latin1")
 
 
-schedule = {
-    "Monday":    ["Stock Screens", "Screen Mesh", "Spectra", "LTC", "Organizing Materials"],
-    "Tuesday":   ["Vision", "RPM Punched", "RPM Stainless", "Organizing Materials"],
-    "Wednesday": ["SIL Plastic", "SIL Fastners", "Schelgal", "Shop Supplies", "Organizing Materials"],
-    "Thursday":  ["Amesbury Truth", "Twin/Multipoint Keepers", "Stock Screens", "Foot Locks", "Organizing Materials"],
-    "Friday":    ["Mini Blinds", "Foam Concept", "Cardboard", "Organizing Materials"],
+# ------------------------------------------------------------------#
+#                     SCHEDULE (STATIC SAMPLE)                      #
+# ------------------------------------------------------------------#
+SCHEDULE: dict[str, list[str]] = {
+    "Monday": [
+        "Stock Screens",
+        "Screen Mesh",
+        "Spectra",
+        "LTC",
+        "Organizing Materials",
+    ],
+    "Tuesday": [
+        "Vision",
+        "RPM Punched",
+        "RPM Stainless",
+        "Organizing Materials",
+    ],
+    "Wednesday": [
+        "SIL Plastic",
+        "SIL Fastners",
+        "Schelgal",
+        "Shop Supplies",
+        "Organizing Materials",
+    ],
+    "Thursday": [
+        "Amesbury Truth",
+        "Twin/Multipoint Keepers",
+        "Stock Screens",
+        "Foot Locks",
+        "Organizing Materials",
+    ],
+    "Friday": [
+        "Mini Blinds",
+        "Foam Concept",
+        "Cardboard",
+        "Organizing Materials",
+    ],
 }
 
+# ------------------------------------------------------------------#
+#                        STREAMLIT LAYOUT                           #
+# ------------------------------------------------------------------#
 st.set_page_config(page_title="Daily Report", layout="wide")
-tab1, tab2 = st.tabs(["📝 Submit Report", "📅 Weekly View"])
+tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
 
-with tab1:
+# ------------------------ TAB 1: SUBMIT ---------------------------#
+with tab_submit:
     st.header("Daily Report – Simarjit Kaur")
+
     date_sel = st.date_input("Date", datetime.today())
-    day = date_sel.strftime("%A")
-    today_tasks = schedule.get(day, [])
+    day_name = date_sel.strftime("%A")
+    today_tasks = SCHEDULE.get(day_name, [])
 
     if not today_tasks:
-        st.info(f"No tasks for {day}")
-    else:
-        with st.form("report_form"):
-            completed = []
-            incomplete = {}
-            task_subtasks = {}
-            st.subheader(f"Tasks for {day}")
+        st.info(f"No predefined tasks for **{day_name}**.")
+        st.stop()
 
-            subtasks = [
-                "Counted and recorded on Excel",
-                "Sent file to managers through email",
-                "Gave physical copies to managers",
-                "Arranged the material to its location"
-            ]
+    # ---------- form ----------#
+    with st.form("report_form", clear_on_submit=True):
+        completed: list[str] = []
+        incomplete: dict[str, str] = {}
+        task_subtasks: dict[str, list[str]] = {}
 
-            for task in today_tasks:
-                choice = st.radio(f"{task} done?", ["Yes", "No"], key=task, horizontal=True)
-                if choice == "Yes":
-                    completed.append(task)
-                    subtask_flags = []
-                    selected_subs = []
-                    st.markdown("✔️ **Confirm Sub-Tasks Completed**")
-                    for sub in subtasks:
-                        is_checked = st.checkbox(f"{sub}", key=f"{task}_{sub}")
-                        subtask_flags.append(is_checked)
-                        if is_checked:
-                            selected_subs.append(sub)
-                    task_subtasks[task] = selected_subs
+        st.subheader(f"Tasks for {day_name}")
 
-                    if not all(subtask_flags):
-                        reason = st.text_area(
-                            f"❗ Reason (Not all sub-tasks completed) – {task}",
-                            key=f"{task}_reason", height=80)
-                        incomplete[task] = reason
+        DEFAULT_SUBTASKS = [
+            "Counted and recorded on Excel",
+            "Sent file to managers via email",
+            "Provided physical copies to managers",
+            "Arranged material in its location",
+        ]
 
-                    if task == "Organizing Materials":
-                        st.text_area("🧹 Organizing Details", key="organizing_details", height=120)
-                else:
-                    reason = st.text_area(f"❗ Reason – {task} not completed", key=f"{task}_reason", height=80)
+        for task in today_tasks:
+            choice = st.radio(
+                f"{task} done?",
+                ["Yes", "No"],
+                key=task,
+                horizontal=True,
+            )
+
+            if choice == "Yes":
+                completed.append(task)
+                selected_subs: list[str] = []
+                flags: list[bool] = []
+
+                st.markdown("✔️ **Confirm Sub-Tasks Completed**")
+                for sub in DEFAULT_SUBTASKS:
+                    checked = st.checkbox(sub, key=f"{task}_{sub}")
+                    flags.append(checked)
+                    if checked:
+                        selected_subs.append(sub)
+
+                task_subtasks[task] = selected_subs
+
+                if not all(flags):
+                    reason = st.text_area(
+                        f"❗ Reason (some sub-tasks incomplete) – {task}",
+                        key=f"{task}_reason",
+                        height=80,
+                    )
                     incomplete[task] = reason
 
-            notes = st.text_area("🗒️ Notes (optional)", height=80)
-            submit = st.form_submit_button("✅ Submit Report")
+                if task == "Organizing Materials":
+                    st.text_area(
+                        "🧹 Organizing Details",
+                        key="organizing_details",
+                        height=120,
+                    )
 
-            if submit:
-                if any(v.strip() == "" for v in incomplete.values()):
-                    st.error("All unchecked tasks require a reason.")
-                else:
-                    incomplete_field = "All completed" if not incomplete else str(incomplete)
-                    with sqlite3.connect(DB_PATH) as conn:
-                        conn.execute("INSERT INTO reports VALUES (?,?,?,?,?,?,?,?)", (
-                            date_sel.strftime("%Y-%m-%d"), day, "Simarjit Kaur",
-                            ", ".join(completed), incomplete_field,
-                            st.session_state.get("organizing_details", ""),
-                            notes,
-                            json.dumps(task_subtasks)
-                        ))
-                    st.success("✅ Report saved!")
+            else:  # task not completed
+                reason = st.text_area(
+                    f"❗ Reason – {task} not completed",
+                    key=f"{task}_reason",
+                    height=80,
+                )
+                incomplete[task] = reason
 
-with tab2:
+        notes = st.text_area("🗒️ Notes (optional)", height=80)
+
+        if st.form_submit_button("✅ Submit Report"):
+            if any(not v.strip() for v in incomplete.values()):
+                st.error("All unchecked tasks require a reason.")
+                st.stop()
+
+            with sqlite3.connect(DB_PATH) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO reports
+                    VALUES (?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        date_sel.strftime("%Y-%m-%d"),
+                        day_name,
+                        "Simarjit Kaur",
+                        ", ".join(completed),
+                        "All completed" if not incomplete else str(incomplete),
+                        st.session_state.get("organizing_details", ""),
+                        notes,
+                        json.dumps(task_subtasks),
+                    ),
+                )
+            st.success("✅ Report saved!")
+
+# ----------------------- TAB 2: WEEKLY VIEW -----------------------#
+with tab_weekly:
     st.header("📅 Weekly Reports")
-    df = pd.read_sql_query("SELECT * FROM reports", sqlite3.connect(DB_PATH))
+
+    df = pd.read_sql("SELECT * FROM reports", sqlite3.connect(DB_PATH))
 
     if df.empty:
         st.info("No records found.")
-    else:
-        df["Date"] = pd.to_datetime(df["date"])
-        df["Week"] = df["Date"].dt.isocalendar().week
-        df["Day"] = df["Date"].dt.strftime("%A")
-        df["subtasks"] = df["subtasks"].apply(lambda x: json.dumps(json.loads(x), indent=1) if x else "")
+        st.stop()
 
-        col1, col2 = st.columns(2)
-        week_no = col1.number_input("Select Week #", 1, 53, df["Week"].max())
-        day_fil = col2.selectbox("Select Day", ["All"] + sorted(df["Day"].unique()))
+    df["Date"] = pd.to_datetime(df["date"])
+    df["Week"] = df["Date"].dt.isocalendar().week
+    df["Day"] = df["Date"].dt.strftime("%A")
+    df["subtasks"] = df["subtasks"].apply(
+        lambda x: json.dumps(json.loads(x or "{}"), indent=1)
+    )
 
-        df_show = df[df["Week"] == week_no]
-        if day_fil != "All":
-            df_show = df_show[df_show["Day"] == day_fil]
+    col1, col2 = st.columns(2)
+    week_no = col1.number_input(
+        "Select Week #", min_value=1, max_value=53, value=int(df["Week"].max())
+    )
+    day_filter = col2.selectbox("Select Day", ["All"] + sorted(df["Day"].unique()))
 
-        st.dataframe(df_show.drop(columns=["Week"]), use_container_width=True)
+    df_week = df[df["Week"] == week_no]
+    if day_filter != "All":
+        df_week = df_week[df_week["Day"] == day_filter]
 
-        excel_buf = io.BytesIO()
-        with pd.ExcelWriter(excel_buf, engine="openpyxl", mode="w") as writer:
-            df_show.drop(columns=["Week"]).to_excel(writer, sheet_name=f"Week{week_no}", index=False)
-        excel_buf.seek(0)
-        st.download_button("📥 Download Excel", data=excel_buf,
-                           file_name=f"Simarjit_Week{week_no}_Report.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.dataframe(df_week.drop(columns=["Week"]), use_container_width=True)
 
-        pdf_bytes = generate_pdf(df_show.drop(columns=["Week"]), week_no)
-        st.download_button("🖨️ Download PDF", data=pdf_bytes,
-                           file_name=f"Simarjit_Week{week_no}_Report.pdf",
-                           mime="application/pdf")
+    # ---------------- Excel download ----------------#
+    excel_buf = io.BytesIO()
+    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+        df_week.drop(columns=["Week"]).to_excel(
+            writer, sheet_name=f"Week{week_no}", index=False
+        )
+    excel_buf.seek(0)
+    st.download_button(
+        "📥 Download Excel",
+        data=excel_buf,
+        file_name=f"Simarjit_Week{week_no}_Report.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    # ---------------- PDF download ----------------#
+    pdf_bytes = generate_pdf(df_week.drop(columns=["Week"]), week_no)
+    st.download_button(
+        "🖨️ Download PDF",
+        data=pdf_bytes,
+        file_name=f"Simarjit_Week{week_no}_Report.pdf",
+        mime="application/pdf",
+    )
