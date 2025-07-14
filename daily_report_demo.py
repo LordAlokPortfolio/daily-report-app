@@ -31,23 +31,45 @@ def clean_text(text):
     text = unicodedata.normalize("NFKD", text)
     return text.encode("ascii", "ignore").decode("ascii")
 
+# === PDF GENERATOR (pretty layout) ===
 def generate_pdf(df, week_no):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, clean_text(f"Simarjit Kaur - Weekly Report (Week {week_no})"), ln=True, align="C")
-    pdf.ln(4)
-    pdf.set_font("Arial", size=10)
+
+    # --- Title ---
+    pdf.set_font("Arial", style="B", size=14)
+    pdf.cell(0, 10, clean_text(f"Simarjit Kaur – Weekly Report (Week {week_no})"),
+             ln=True, align="C")
+    pdf.ln(5)
+
+    # --- Each day’s entry ---
     for _, r in df.iterrows():
-        pdf.multi_cell(0, 7, clean_text(
-            f"Date: {r['date']} | Day: {r['day']}\n"
-            f"Completed Tasks: {r['completed_tasks']}\n"
-            f"Incomplete Tasks: {r['incomplete_tasks']}\n"
-            f"Organizing Details: {r['organizing_details']}\n"
-            f"Sub-Tasks Done: {r.get('subtasks', '')}\n"
-            f"Notes: {r['notes']}\n" + "-"*70))
+        # Header line (date & day)
+        pdf.set_font("Arial", style="B", size=11)
+        pdf.cell(0, 8, clean_text(f"📅 {r['date']}  ({r['Day']})"), ln=True)
+
+        # Body text
+        pdf.set_font("Arial", size=10)
+        pdf.multi_cell(0, 6, clean_text(
+            f"✅ Completed Tasks:\n{r['completed_tasks'] or '—'}\n\n"
+            f"❌ Incomplete Tasks:\n{r['incomplete_tasks'] or '—'}\n\n"
+            f"🧹 Organizing Details:\n{r['organizing_details'] or '—'}\n\n"
+            f"📌 Sub-Tasks:\n{r.get('subtasks','—') or '—'}\n\n"
+            f"🗒️ Notes:\n{r['notes'] or '—'}"
+        ))
+
+        # Divider
         pdf.ln(1)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+
+    # --- Page footer ---
+    pdf.set_y(-15)
+    pdf.set_font("Arial", "I", 8)
+    pdf.cell(0, 10, f"Page {pdf.page_no()}", 0, 0, "C")
+
     return pdf.output(dest="S").encode("latin1")
+
 
 schedule = {
     "Monday":    ["Stock Screens", "Screen Mesh", "Spectra", "LTC", "Organizing Materials"],
