@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-from fpdf import FPDF
 
 # ------------------------------------------------------------------#
 # CONFIG                                                            #
@@ -170,11 +169,4 @@ with tab_weekly:
                        file_name="Simarjit_All_Reports.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    # PDF (last 7 days)
-    last7 = df[df["date"] >= datetime.now() - timedelta(days=7)]
-    if not last7.empty:
-        pdf_bytes = generate_pdf(last7, title="Last 7 Day Summary")
-        st.download_button("🖨️ PDF (last 7 days)",
-                           data=pdf_bytes,
-                           file_name="Last7Days_Report.pdf",
-                           mime="application/pdf")
+   
