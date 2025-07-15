@@ -315,10 +315,10 @@ with tab_weekly:
     )
 
     # ---------------- PDF download ----------------#
-    pdf_bytes = generate_pdf(df_week.drop(columns=["Week"]), week_no)
+    pdf_bytes = generate_pdf(df_week.drop(columns=["Week"]), week_no) # type: ignore
     st.download_button(
         "🖨️ Download PDF",
         data=pdf_bytes,
-        file_name=f"Simarjit_Week{week_no}_Report.pdf",
+        file_name=f"Simarjit_Week{week_no}_Report.pdf", # type: ignore
         mime="application/pdf",
     )
