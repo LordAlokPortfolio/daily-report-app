@@ -2,12 +2,13 @@
 Streamlit Daily Report App for Simarjit Kaur
 -------------------------------------------
 Creates / reads a local SQLite database of daily reports and
-lets the user generate Excel + PDF summaries.
+lets the user generate Excel summaries (vertical layout,
+one Excel sheet per ISO‑week).
 """
 
 from __future__ import annotations
 import io, json, sqlite3, unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -19,7 +20,7 @@ import streamlit as st
 DB_PATH = Path(r"M:\ALOK\Daily Reports\daily_reports.db")
 
 # ------------------------------------------------------------------#
-# DB INIT                                                            #
+# DB INIT                                                           #
 # ------------------------------------------------------------------#
 def init_db() -> None:
     with sqlite3.connect(DB_PATH) as conn:
@@ -51,17 +52,36 @@ def clean_text(text):
     if not isinstance(text, str):
         return ""
     text = unicodedata.normalize("NFKD", text)
-    return text.encode('latin-1', 'ignore').decode('latin-1')
+    return text.encode("latin-1", "ignore").decode("latin-1")
+
 
 # ------------------------------------------------------------------#
 # STATIC TASK SCHEDULE                                              #
 # ------------------------------------------------------------------#
-SCHEDULE = {
-    "Monday":  ["Stock Screens", "Screen Mesh", "Spectra", "LTC", "Organizing Materials"],
+SCHEDULE: dict[str, list[str]] = {
+    "Monday": [
+        "Stock Screens",
+        "Screen Mesh",
+        "Spectra",
+        "LTC",
+        "Organizing Materials",
+    ],
     "Tuesday": ["Vision", "RPM Punched", "RPM Stainless", "Organizing Materials"],
-    "Wednesday": ["SIL Plastic", "SIL Fastners", "Schelgal", "Shop Supplies", "Organizing Materials"],
-    "Thursday": ["Amesbury Truth", "Twin/Multipoint Keepers", "Stock Screens", "Foot Locks", "Organizing Materials"],
-    "Friday":  ["Mini Blinds", "Foam Concept", "Cardboard", "Organizing Materials"],
+    "Wednesday": [
+        "SIL Plastic",
+        "SIL Fastners",
+        "Schelgal",
+        "Shop Supplies",
+        "Organizing Materials",
+    ],
+    "Thursday": [
+        "Amesbury Truth",
+        "Twin/Multipoint Keepers",
+        "Stock Screens",
+        "Foot Locks",
+        "Organizing Materials",
+    ],
+    "Friday": ["Mini Blinds", "Foam Concept", "Cardboard", "Organizing Materials"],
 }
 
 # ------------------------------------------------------------------#
@@ -94,7 +114,9 @@ with tab_submit:
         ]
 
         for task in tasks:
-            done = st.radio(f"{task} done?", ["Yes", "No"], key=task, horizontal=True)
+            done = st.radio(
+                f"{task} done?", ["Yes", "No"], key=task, horizontal=True
+            )
             if done == "Yes":
                 completed.append(task)
                 flags, chosen = [], []
@@ -107,16 +129,25 @@ with tab_submit:
                 task_subs[task] = chosen
 
                 if not all(flags):
-                    reason = st.text_area(f"❗ Reason – sub‑tasks missing ({task})",
-                                          key=f"{task}_reason", height=80)
+                    reason = st.text_area(
+                        f"❗ Reason – sub‑tasks missing ({task})",
+                        key=f"{task}_reason",
+                        height=80,
+                    )
                     incomplete[task] = reason
 
                 if task == "Organizing Materials":
-                    st.text_area("🧹 Organizing Details",
-                                 key="organizing_details", height=120)
+                    st.text_area(
+                        "🧹 Organizing Details",
+                        key="organizing_details",
+                        height=120,
+                    )
             else:
-                reason = st.text_area(f"❗ Reason – not done ({task})",
-                                      key=f"{task}_reason", height=80)
+                reason = st.text_area(
+                    f"❗ Reason – not done ({task})",
+                    key=f"{task}_reason",
+                    height=80,
+                )
                 incomplete[task] = reason
 
         notes = st.text_area("🗒️ Notes (optional)", height=80)
@@ -151,45 +182,50 @@ with tab_weekly:
         st.info("No reports found.")
         st.stop()
 
-    # prepare columns
+    # tidy columns for display
     df["date"] = pd.to_datetime(df["date"])
-    df["Day"]  = df["date"].dt.strftime("%A")  # pretty day-name
+    df["Day"] = df["date"].dt.strftime("%A")
     df["subtasks"] = df["subtasks"].apply(
         lambda x: json.dumps(json.loads(x or "{}"), indent=1)
     )
 
     st.dataframe(df.drop(columns=["day"]), use_container_width=True)
 
-        # --- Excel export: vertical layout, one ISO‑week per sheet -------------
-    dt  = pd.to_datetime(df["date"])
-    iso = dt.dt.isocalendar()
+    # -------- Excel download (vertical layout, one sheet per ISO week) -----
+    excel_buf = io.BytesIO()
+
+    # add ISO calendar columns
+    iso = df["date"].dt.isocalendar()
     df["iso_year"], df["iso_week"] = iso.year, iso.week
 
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as wr:
-
+    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
         for (yr, wk), grp in df.groupby(["iso_year", "iso_week"]):
             sheet = f"W{wk:02d}_{yr}"
-        start_row = 0
+            start_row = 0
 
-        # write each record vertically
-        for _, row in grp.iterrows():
-            # drop helper cols + any exact duplicates (e.g., "Day" vs "day")
-            clean = row.drop(labels=["iso_year", "iso_week"]).sort_index()
-            clean = clean.loc[~clean.index.duplicated(keep="first")]
+            for _, row in grp.iterrows():
+                # drop helper cols + duplicates
+                clean = row.drop(labels=["iso_year", "iso_week"]).loc[
+                    ~row.index.duplicated(keep="first")
+                ]
+                vertical = (
+                    clean.to_frame(name="Value")
+                    .reset_index()
+                    .rename(columns={"index": "Field"})
+                )
+                vertical.to_excel(
+                    writer,
+                    sheet_name=sheet,
+                    index=False,
+                    header=start_row == 0,  # header only on first record
+                    startrow=start_row,
+                )
+                start_row += len(vertical) + 1  # add blank spacer row
 
-            # build Field / Value dataframe
-            vert = clean.to_frame(name="Value").reset_index().rename(columns={"index": "Field"})
-
-            # write, then leave one blank row
-            vert.to_excel(wr, sheet_name=sheet, index=False, header=start_row == 0,
-                          startrow=start_row)
-            start_row += len(vert) + 1   # +=1 for the blank row separator
-
-        buf.seek(0)
-        st.download_button(
-        "📥 Download Weekly Workbook (vertical)",
-        data=buf,
+    excel_buf.seek(0)
+    st.download_button(
+        "📥 Download Weekly Workbook (vertical)",
+        data=excel_buf,
         file_name="Simarjit_All_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+    )
