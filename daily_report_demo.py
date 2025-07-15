@@ -48,18 +48,13 @@ init_db()
 # ------------------------------------------------------------------#
 # HELPERS                                                           #
 # ------------------------------------------------------------------#
-def clean_text(text: str | None) -> str:
-    """Remove characters not supported by built‑in Latin‑1 PDF fonts."""
+def clean_text(text):
     if not isinstance(text, str):
         return ""
-    return (
-        unicodedata.normalize("NFKD", text)
-        .encode("latin-1", "ignore")
-        .decode("latin-1")
-    )
+    text = unicodedata.normalize("NFKD", text)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
 
-
-def generate_pdf(df: pd.DataFrame, title: str = "Weekly Summary") -> bytes:
+def generate_pdf(df, title="Weekly Summary"):
     pdf = FPDF()
     pdf.set_auto_page_break(True, margin=15)
     pdf.add_page()
@@ -77,12 +72,12 @@ def generate_pdf(df: pd.DataFrame, title: str = "Weekly Summary") -> bytes:
         pdf.multi_cell(0, 6, clean_text(f"✅ Completed:\n{row['completed_tasks'] or '—'}"))
         pdf.multi_cell(0, 6, clean_text(f"❌ Incomplete:\n{row['incomplete_tasks'] or '—'}"))
 
-        if row["organizing_details"]:
+        if row.get("organizing_details"):
             pdf.multi_cell(0, 6, clean_text(f"🧹 Organizing:\n{row['organizing_details']}"))
 
         try:
             subs = json.loads(row.get("subtasks", "") or "{}")
-        except Exception:
+        except:
             subs = {}
         if subs:
             pdf.multi_cell(0, 6, "📋 Sub‑Tasks:")
@@ -91,7 +86,7 @@ def generate_pdf(df: pd.DataFrame, title: str = "Weekly Summary") -> bytes:
                 for it in items:
                     pdf.multi_cell(0, 6, clean_text(f"    – {it}"))
 
-        if row["notes"]:
+        if row.get("notes"):
             pdf.multi_cell(0, 6, clean_text(f"🗒️ Notes:\n{row['notes']}"))
 
         pdf.ln(2)
@@ -100,10 +95,10 @@ def generate_pdf(df: pd.DataFrame, title: str = "Weekly Summary") -> bytes:
 
     pdf.set_y(-15)
     pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(0, 6, f"Generated {datetime.now():%d %b %Y %H:%M}", 0, 0, "L")
+    pdf.cell(0, 6, clean_text(f"Generated {datetime.now():%d %b %Y %H:%M}"), 0, 0, "L")
     pdf.cell(0, 6, f"Page {pdf.page_no()}", 0, 0, "R")
 
-    return pdf.output(dest="S").encode("latin-1", "replace")
+    return pdf.output(dest="S").encode('latin-1')
 
 
 # ------------------------------------------------------------------#
