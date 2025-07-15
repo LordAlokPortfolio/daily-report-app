@@ -101,7 +101,7 @@ def generate_pdf(df: pd.DataFrame, title: str = "Weekly Summary") -> bytes:
     pdf.cell(0, 6, f"Generated {datetime.now():%d %b %Y %H:%M}", 0, 0, "L")
     pdf.cell(0, 6, f"Page {pdf.page_no()}", 0, 0, "R")
 
-    return pdf.output(dest="S").encode("latin-1")
+    return pdf.output(dest="S").encode("latin-1",'replace')
 
 # ------------------------------------------------------------------#
 #                    STATIC TASK SCHEDULE                          #
