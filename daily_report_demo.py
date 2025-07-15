@@ -298,12 +298,7 @@ with tab_weekly:
                        file_name="Simarjit_All_Reports.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    pdf_bytes = generate_pdf(df, week_no=None)  # pass None or any label
-    st.download_button("🖨️ Download PDF", data=pdf_bytes,
-                       file_name="Simarjit_All_Reports.pdf",
-                       mime="application/pdf")
-
-
+    
     # ------------- PDF download (last 7 days) -------------
     last_week = df[df["Date"] >= df["Date"].max() - pd.Timedelta(days=7)]
     pdf_bytes = generate_pdf(last_week, week_no=last_week["Date"].dt.isocalendar().week.max())
