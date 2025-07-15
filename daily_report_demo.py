@@ -271,9 +271,9 @@ with tab_submit:
                 )
             st.success("✅ Report saved!")
 
-# ----------------------- TAB 2: WEEKLY VIEW -----------------------#
+# ----------------------- TAB 2: WEEKLY VIEW -----------------------#
 with tab_weekly:
-    st.header("📅 Weekly Reports")
+    st.header("📅 All Reports")
 
     df = pd.read_sql("SELECT * FROM reports", sqlite3.connect(DB_PATH))
 
@@ -282,36 +282,36 @@ with tab_weekly:
         st.stop()
 
     df["Date"] = pd.to_datetime(df["date"])
-    df["Week"] = df["Date"].dt.isocalendar().week
-    df["Day"] = df["Date"].dt.strftime("%A")
+    df["Day"]  = df["Date"].dt.strftime("%A")
+    df.sort_values("Date", ascending=False, inplace=True)
+
+    # pretty‑print subtasks JSON for table view
     df["subtasks"] = df["subtasks"].apply(
         lambda x: json.dumps(json.loads(x or "{}"), indent=1)
     )
 
-    col1, col2 = st.columns(2)
-    week_no = col1.number_input(
-        "Select Week #", min_value=1, max_value=53, value=int(df["Week"].max())
-    )
-    day_filter = col2.selectbox("Select Day", ["All"] + sorted(df["Day"].unique()))
+    st.dataframe(df, use_container_width=True)
 
-    df_week = df[df["Week"] == week_no]
-    if day_filter != "All":
-        df_week = df_week[df_week["Day"] == day_filter]
-
-    st.dataframe(df_week.drop(columns=["Week"]), use_container_width=True)
-
-    # ---------------- Excel download ----------------#
-    excel_buf = io.BytesIO()
-    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-        df_week.drop(columns=["Week"]).to_excel(
-            writer, sheet_name=f"Week{week_no}", index=False
-        )
-    excel_buf.seek(0)
+    # ------------- Excel download (full data) -------------
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="AllReports", index=False)
+    buf.seek(0)
     st.download_button(
-        "📥 Download Excel",
-        data=excel_buf,
-        file_name=f"Simarjit_Week{week_no}_Report.xlsx",
+        "📥 Download Excel (all)",
+        buf,
+        "Simarjit_AllReports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    # ------------- PDF download (last 7 days) -------------
+    last_week = df[df["Date"] >= df["Date"].max() - pd.Timedelta(days=7)]
+    pdf_bytes = generate_pdf(last_week, week_no=last_week["Date"].dt.isocalendar().week.max())
+    st.download_button(
+        "🖨️ Download PDF (last 7 days)",
+        pdf_bytes,
+        "Simarjit_LastWeek_Report.pdf",
+        mime="application/pdf",
     )
 
     # ---------------- PDF download ----------------#
