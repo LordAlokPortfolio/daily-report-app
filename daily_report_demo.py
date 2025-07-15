@@ -160,13 +160,30 @@ with tab_weekly:
 
     st.dataframe(df.drop(columns=["day"]), use_container_width=True)
 
-    # Excel (all)
+        # --- Excel export: one ISO‑week per sheet -------------------------------
+    # Build ISO‑year / ISO‑week columns
+    dt = pd.to_datetime(df["date"])
+    iso = dt.dt.isocalendar()          # (= year, week, weekday)
+    df["iso_year"] = iso.year
+    df["iso_week"] = iso.week
+
+    # Create an in‑memory workbook
     buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as wr:
-        df.to_excel(wr, sheet_name="All Reports", index=False)
+    with pd.ExcelWriter(buf, engine="openpyxl") as wr:   # use openpyxl on Cloud
+        for (yr, wk), grp in df.groupby(["iso_year", "iso_week"]):
+            sheet = f"W{wk:02d}_{yr}"                    # e.g. W29_2025
+            (grp
+             .drop(columns=["iso_year", "iso_week"])     # keep sheet clean
+             .to_excel(wr, sheet_name=sheet, index=False)
+            )
     buf.seek(0)
-    st.download_button("📥 Download Excel", data=buf,
-                       file_name="Simarjit_All_Reports.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    # Download link
+    st.download_button(
+        "📥 Download Weekly Workbook",
+        data=buf,
+        file_name="Simarjit_All_Reports.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
    
