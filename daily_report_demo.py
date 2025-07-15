@@ -273,36 +273,36 @@ with tab_submit:
 
 # ----------------------- TAB 2: WEEKLY VIEW -----------------------#
 with tab_weekly:
-    st.header("📅 All Reports")
+    st.header("📅 Weekly Reports")
 
     df = pd.read_sql("SELECT * FROM reports", sqlite3.connect(DB_PATH))
-
     if df.empty:
         st.info("No records found.")
         st.stop()
 
+    # Prepare summary columns like before:
     df["Date"] = pd.to_datetime(df["date"])
-    df["Day"]  = df["Date"].dt.strftime("%A")
-    df.sort_values("Date", ascending=False, inplace=True)
-
-    # pretty‑print subtasks JSON for table view
+    df["Day"] = df["Date"].dt.strftime("%A")
     df["subtasks"] = df["subtasks"].apply(
         lambda x: json.dumps(json.loads(x or "{}"), indent=1)
     )
 
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df.drop(columns=["date", "Day"]), use_container_width=True)
 
-    # ------------- Excel download (full data) -------------
+    # Excel export (all data)
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name="AllReports", index=False)
     buf.seek(0)
-    st.download_button(
-        "📥 Download Excel (all)",
-        buf,
-        "Simarjit_AllReports.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    st.download_button("📥 Download Excel", data=buf,
+                       file_name="Simarjit_All_Reports.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    pdf_bytes = generate_pdf(df, week_no=None)  # pass None or any label
+    st.download_button("🖨️ Download PDF", data=pdf_bytes,
+                       file_name="Simarjit_All_Reports.pdf",
+                       mime="application/pdf")
+
 
     # ------------- PDF download (last 7 days) -------------
     last_week = df[df["Date"] >= df["Date"].max() - pd.Timedelta(days=7)]
