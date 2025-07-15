@@ -191,10 +191,10 @@ with tab_weekly:
 
     st.dataframe(df.drop(columns=["day"]), use_container_width=True)
 
-    # -------- Excel download (vertical layout, one sheet per ISO week) -----
+        # -------- Excel download (vertical layout, one sheet per ISO week) -----
     excel_buf = io.BytesIO()
 
-    # add ISO calendar columns
+    # Add ISO calendar columns
     iso = df["date"].dt.isocalendar()
     df["iso_year"], df["iso_week"] = iso.year, iso.week
 
@@ -203,24 +203,25 @@ with tab_weekly:
             sheet = f"W{wk:02d}_{yr}"
             start_row = 0
 
-            clean = (
-                row.drop(labels=["iso_year", "iso_week"])
-                       .groupby(level=0).first()          # merge any dups
+            for _, row in grp.iterrows():
+                # <<< Correctly indented here! >>>
+                clean = (
+                    row.drop(labels=["iso_year", "iso_week"])
+                       .groupby(level=0).first()  # collapses any duplicate fields
                 )
-
-            vertical = (
+                vertical = (
                     clean.to_frame(name="Value")
-                    .reset_index()
-                    .rename(columns={"index": "Field"})
+                         .reset_index()
+                         .rename(columns={"index": "Field"})
                 )
-            vertical.to_excel(
+                vertical.to_excel(
                     writer,
                     sheet_name=sheet,
                     index=False,
-                    header=start_row == 0,  # header only on first record
+                    header=(start_row == 0),
                     startrow=start_row,
                 )
-            start_row += len(vertical) + 1  # add blank spacer row
+                start_row += len(vertical) + 1  # adds one blank row between entries
 
     excel_buf.seek(0)
     st.download_button(
@@ -229,3 +230,4 @@ with tab_weekly:
         file_name="Simarjit_All_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
