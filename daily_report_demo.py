@@ -103,7 +103,6 @@ def generate_pdf(df: pd.DataFrame, title: str = "Weekly Summary") -> bytes:
 
     return pdf.output(dest="S").encode("latin-1")
 
-
 # ------------------------------------------------------------------#
 #                    STATIC TASK SCHEDULE                          #
 # ------------------------------------------------------------------#
