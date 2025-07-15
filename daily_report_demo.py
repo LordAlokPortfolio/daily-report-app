@@ -203,24 +203,24 @@ with tab_weekly:
             sheet = f"W{wk:02d}_{yr}"
             start_row = 0
 
-            for _, row in grp.iterrows():
-                # drop helper cols + duplicates
-                clean = row.drop(labels=["iso_year", "iso_week"]).loc[
-                    ~row.index.duplicated(keep="first")
-                ]
-                vertical = (
+            clean = (
+                row.drop(labels=["iso_year", "iso_week"])
+                       .groupby(level=0).first()          # merge any dups
+                )
+
+            vertical = (
                     clean.to_frame(name="Value")
                     .reset_index()
                     .rename(columns={"index": "Field"})
                 )
-                vertical.to_excel(
+            vertical.to_excel(
                     writer,
                     sheet_name=sheet,
                     index=False,
                     header=start_row == 0,  # header only on first record
                     startrow=start_row,
                 )
-                start_row += len(vertical) + 1  # add blank spacer row
+            start_row += len(vertical) + 1  # add blank spacer row
 
     excel_buf.seek(0)
     st.download_button(
