@@ -191,23 +191,38 @@ with tab_weekly:
 
     st.dataframe(df.drop(columns=["day"]), use_container_width=True)
 
-        # -------- Excel download (vertical layout, one sheet per ISO week) -----
+    # -------- Excel download (vertical layout, JSON flattened) -------------
     excel_buf = io.BytesIO()
 
-    # Add ISO calendar columns
-    iso = df["date"].dt.isocalendar()
-    df["iso_year"], df["iso_week"] = iso.year, iso.week
+    # Parse JSON‑like columns into readable text ----------------------------
+    def to_pretty(val):
+        try:
+            obj = json.loads(val)
+            if isinstance(obj, dict):
+                # turn dict into "key: v1, v2" lines
+                lines = [f"{k}: {', '.join(v)}" for k, v in obj.items()]
+                return "\n".join(lines)
+        except Exception:
+            pass
+        return val  # leave as‑is if not JSON
 
+    tidy = df.copy()
+    tidy["subtasks"] = tidy["subtasks"].apply(to_pretty)
+    tidy["incomplete_tasks"] = tidy["incomplete_tasks"].apply(to_pretty)
+
+    # add ISO calendar columns
+    iso = tidy["date"].dt.isocalendar()
+    tidy["iso_year"], tidy["iso_week"] = iso.year, iso.week
+
+    # write workbook
     with pd.ExcelWriter(excel_buf, engine="xlsxwriter") as writer:
-        for (yr, wk), grp in df.groupby(["iso_year", "iso_week"]):
+        for (yr, wk), grp in tidy.groupby(["iso_year", "iso_week"]):
             sheet = f"W{wk:02d}_{yr}"
             start_row = 0
-
             for _, row in grp.iterrows():
-                # <<< Correctly indented here! >>>
                 clean = (
                     row.drop(labels=["iso_year", "iso_week"])
-                       .groupby(level=0).first()  # collapses any duplicate fields
+                       .groupby(level=0).first()          # remove dups
                 )
                 vertical = (
                     clean.to_frame(name="Value")
@@ -221,13 +236,12 @@ with tab_weekly:
                     header=(start_row == 0),
                     startrow=start_row,
                 )
-                start_row += len(vertical) + 1  # adds one blank row between entries
+                start_row += len(vertical) + 1  # spacer row
 
     excel_buf.seek(0)
     st.download_button(
-        "📥 Download Weekly Workbook (vertical)",
+        "📥 Download Weekly Workbook (vertical, clean)",
         data=excel_buf,
         file_name="Simarjit_All_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-
