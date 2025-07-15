@@ -181,7 +181,8 @@ with tab_submit:
                 "All completed" if not incomplete else str(incomplete),
                 st.session_state.get("organizing_details", ""),
                 notes,
-                json.dumps(task_subs),
+                json.dumps(task_subs),  # OK as long as you map to "subtasks" column
+
             ))
             conn.commit()
             conn.close()
@@ -196,11 +197,11 @@ with tab_weekly:
         st.info("No reports found.")
         st.stop()
 
-    df["Date"] = pd.to_datetime(df["date"])
+    df["Date"] = pd.to_datetime(df["Date"])
     df["Day"] = df["Date"].dt.strftime("%A")
     df["subtasks"] = df["subtasks"].apply(lambda x: json.dumps(json.loads(x or "{}"), indent=1))
 
-    st.dataframe(df.drop(columns=["date"]), use_container_width=True)
+    st.dataframe(df.drop(columns=["Date"]), use_container_width=True)
 
     # Excel Export
     buf = io.BytesIO()
@@ -214,7 +215,7 @@ with tab_weekly:
     # PDF Export (last 7 days)
     last = df[df["Date"] >= datetime.now() - timedelta(days=7)]
     if not last.empty:
-        pdf_bytes = generate_pdf(last, title="Last 7‑Day Summary")
+        pdf_bytes = generate_pdf(last, title="Last 7 Day Summary")
         st.download_button("🖨️ Download PDF (last 7 days)",
                            data=pdf_bytes,
                            file_name="Last7Days_Report.pdf",
