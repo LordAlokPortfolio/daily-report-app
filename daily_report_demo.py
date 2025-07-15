@@ -198,7 +198,7 @@ with tab_weekly:
     iso = df["date"].dt.isocalendar()
     df["iso_year"], df["iso_week"] = iso.year, iso.week
 
-    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+    with pd.ExcelWriter(excel_buf, engine="xlsxwriter") as writer:
         for (yr, wk), grp in df.groupby(["iso_year", "iso_week"]):
             sheet = f"W{wk:02d}_{yr}"
             start_row = 0
