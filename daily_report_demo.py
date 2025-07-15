@@ -194,54 +194,47 @@ with tab_weekly:
     # -------- Excel download (vertical layout, JSON flattened) -------------
     excel_buf = io.BytesIO()
 
-    # Parse JSON‑like columns into readable text ----------------------------
-    def to_pretty(val):
-        try:
-            obj = json.loads(val)
-            if isinstance(obj, dict):
-                # turn dict into "key: v1, v2" lines
-                lines = [f"{k}: {', '.join(v)}" for k, v in obj.items()]
-                return "\n".join(lines)
-        except Exception:
-            pass
-        return val  # leave as‑is if not JSON
+# 1. Flatten JSON-ish fields nicely
+def to_pretty(val):
+    try:
+        obj = json.loads(val)
+        if isinstance(obj, dict):
+            lines = [f"{k}: {', '.join(v)}" for k, v in obj.items()]
+            return "\n".join(lines)
+    except:
+        pass
+    return val or ""
 
-    tidy = df.copy()
-    tidy["subtasks"] = tidy["subtasks"].apply(to_pretty)
-    tidy["incomplete_tasks"] = tidy["incomplete_tasks"].apply(to_pretty)
+tidy = df.copy()
+tidy["subtasks"] = tidy["subtasks"].apply(to_pretty)
+tidy["incomplete_tasks"] = tidy["incomplete_tasks"].apply(to_pretty)
 
-    # add ISO calendar columns
-    iso = tidy["date"].dt.isocalendar()
-    tidy["iso_year"], tidy["iso_week"] = iso.year, iso.week
+# 2. Add ISO week
+iso = tidy["date"].dt.isocalendar()
+tidy["iso_year"], tidy["iso_week"] = iso.year, iso.week
 
-    # write workbook
-    with pd.ExcelWriter(excel_buf, engine="xlsxwriter") as writer:
-        for (yr, wk), grp in tidy.groupby(["iso_year", "iso_week"]):
-            sheet = f"W{wk:02d}_{yr}"
-            start_row = 0
-            for _, row in grp.iterrows():
-                clean = (
-                    row.drop(labels=["iso_year", "iso_week"])
-                       .groupby(level=0).first()          # remove dups
-                )
-                vertical = (
-                    clean.to_frame(name="Value")
-                         .reset_index()
-                         .rename(columns={"index": "Field"})
-                )
-                vertical.to_excel(
-                    writer,
-                    sheet_name=sheet,
-                    index=False,
-                    header=(start_row == 0),
-                    startrow=start_row,
-                )
-                start_row += len(vertical) + 1  # spacer row
+# 3. Write Excel with wrapped subtasks
+with pd.ExcelWriter(excel_buf, engine="xlsxwriter") as writer:
+    workbook = writer.book
+    wrap_fmt = workbook.add_format({'text_wrap': True})
+    for (yr, wk), grp in tidy.groupby(["iso_year", "iso_week"]):
+        sheet = f"W{wk:02d}_{yr}"
+        start_row = 0
+        worksheet = None
+        for _, row in grp.iterrows():
+            clean = row.drop(labels=["iso_year", "iso_week"]).groupby(level=0).first()
+            vertical = clean.to_frame(name="Value").reset_index().rename(columns={"index": "Field"})
+            vertical.to_excel(writer, sheet_name=sheet, index=False, header=(start_row==0), startrow=start_row)
+            if worksheet is None:
+                worksheet = writer.sheets[sheet]
+                worksheet.set_column('B:B', 60, wrap_fmt)  # wrap column B
+            start_row += len(vertical) + 1
 
-    excel_buf.seek(0)
-    st.download_button(
-        "📥 Download Weekly Workbook (vertical, clean)",
-        data=excel_buf,
-        file_name="Simarjit_All_Reports.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+excel_buf.seek(0)
+st.download_button(
+    "📥 Download Weekly Workbook (vertical, wrapped)",
+    data=excel_buf,
+    file_name="Simarjit_All_Reports.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+)
+
