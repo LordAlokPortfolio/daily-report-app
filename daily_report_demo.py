@@ -48,64 +48,61 @@ init_db()
 #                         HELPER FUNCTIONS                          #
 # ------------------------------------------------------------------#
 def clean_text(text: str | None) -> str:
+    """Strip any character that the built‑in Latin‑1 PDF font can’t encode."""
     if not isinstance(text, str):
         return ""
-    normalized = unicodedata.normalize("NFKD", text)
-    return normalized.encode("ascii", "ignore").decode("ascii")
+    text = unicodedata.normalize("NFKD", text)
+    return text.encode("latin-1", "ignore").decode("latin-1")
 
 
 def generate_pdf(df: pd.DataFrame, title: str = "Weekly Summary") -> bytes:
-    pdf = FPDF("P", "mm", "A4")
+    """Return a PDF (bytes) built only with Latin‑1‑safe characters."""
+    pdf = FPDF()
     pdf.set_auto_page_break(True, margin=15)
     pdf.add_page()
 
-    # Title banner
-    pdf.set_fill_color(30, 144, 255)
-    pdf.rect(0, 0, 210, 18, style="F")
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 6, f"Simarjit Kaur – {title}", ln=1, align="C")
-    pdf.ln(8)
-    pdf.set_text_color(0, 0, 0)
+    # header
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, clean_text(f"Simarjit Kaur – {title}"), ln=True, align="C")
+    pdf.ln(4)
+    pdf.set_font("Helvetica", size=10)
 
     for _, row in df.iterrows():
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.set_fill_color(245, 245, 245)
-        pdf.cell(0, 8, f"{row['date']}  ({row['Day']})", ln=1, fill=True)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(0, 8, clean_text(f"{row['date']}  ({row['Day']})"), ln=True)
 
-        pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(0, 6, f"✅ Completed: {row['completed_tasks'] or '—'}")
-        pdf.multi_cell(0, 6, f"❌ Incomplete: {row['incomplete_tasks'] or '—'}")
+        pdf.set_font("Helvetica", size=10)
+        pdf.multi_cell(0, 6, clean_text(f"✅ Completed:\n{row['completed_tasks'] or '—'}"))
+        pdf.multi_cell(0, 6, clean_text(f"❌ Incomplete:\n{row['incomplete_tasks'] or '—'}"))
 
         if row["organizing_details"]:
-            pdf.multi_cell(0, 6, f"🧹 Organizing: {row['organizing_details']}")
+            pdf.multi_cell(0, 6, clean_text(f"🧹 Organizing:\n{row['organizing_details']}"))
 
         try:
             subs = json.loads(row.get("subtasks", "") or "{}")
-        except:
+        except Exception:
             subs = {}
         if subs:
-            pdf.multi_cell(0, 6, "📋 Sub-Tasks:")
-            for t, items in subs.items():
-                pdf.multi_cell(0, 6, f"• {t}")
+            pdf.multi_cell(0, 6, "📋 Sub‑Tasks:")
+            for task, items in subs.items():
+                pdf.multi_cell(0, 6, clean_text(f"• {task}"))
                 for it in items:
-                    pdf.multi_cell(0, 6, f"    – {it}")
+                    pdf.multi_cell(0, 6, clean_text(f"    – {it}"))
 
         if row["notes"]:
-            pdf.multi_cell(0, 6, f"🗒️ Notes: {row['notes']}")
+            pdf.multi_cell(0, 6, clean_text(f"🗒️ Notes:\n{row['notes']}"))
 
-        pdf.ln(4)
-        pdf.set_draw_color(200, 200, 200)
-        y = pdf.get_y()
-        pdf.line(10, y, 200, y)
+        pdf.ln(2)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(4)
 
-    pdf.set_y(-12)
+    pdf.set_y(-15)
     pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(0, 6, f"Generated {datetime.now():%d %b %Y %H:%M}", 0, 0, "L")
+    pdf.cell(0, 6, f"Generated {datetime.now():%d %b %Y %H:%M}", 0, 0, "L")
     pdf.cell(0, 6, f"Page {pdf.page_no()}", 0, 0, "R")
 
     return pdf.output(dest="S").encode("latin-1")
+
 
 # ------------------------------------------------------------------#
 #                    STATIC TASK SCHEDULE                          #
