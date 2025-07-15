@@ -160,30 +160,36 @@ with tab_weekly:
 
     st.dataframe(df.drop(columns=["day"]), use_container_width=True)
 
-        # --- Excel export: one ISO‑week per sheet -------------------------------
-    # Build ISO‑year / ISO‑week columns
-    dt = pd.to_datetime(df["date"])
-    iso = dt.dt.isocalendar()          # (= year, week, weekday)
-    df["iso_year"] = iso.year
-    df["iso_week"] = iso.week
+        # --- Excel export: vertical layout, one ISO‑week per sheet -------------
+    dt  = pd.to_datetime(df["date"])
+    iso = dt.dt.isocalendar()
+    df["iso_year"], df["iso_week"] = iso.year, iso.week
 
-    # Create an in‑memory workbook
     buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as wr:   # use openpyxl on Cloud
-        for (yr, wk), grp in df.groupby(["iso_year", "iso_week"]):
-            sheet = f"W{wk:02d}_{yr}"                    # e.g. W29_2025
-            (grp
-             .drop(columns=["iso_year", "iso_week"])     # keep sheet clean
-             .to_excel(wr, sheet_name=sheet, index=False)
-            )
-    buf.seek(0)
+    with pd.ExcelWriter(buf, engine="openpyxl") as wr:
 
-    # Download link
-    st.download_button(
-        "📥 Download Weekly Workbook",
+        for (yr, wk), grp in df.groupby(["iso_year", "iso_week"]):
+            sheet = f"W{wk:02d}_{yr}"
+        start_row = 0
+
+        # write each record vertically
+        for _, row in grp.iterrows():
+            # drop helper cols + any exact duplicates (e.g., "Day" vs "day")
+            clean = row.drop(labels=["iso_year", "iso_week"]).sort_index()
+            clean = clean.loc[~clean.index.duplicated(keep="first")]
+
+            # build Field / Value dataframe
+            vert = clean.to_frame(name="Value").reset_index().rename(columns={"index": "Field"})
+
+            # write, then leave one blank row
+            vert.to_excel(wr, sheet_name=sheet, index=False, header=start_row == 0,
+                          startrow=start_row)
+            start_row += len(vert) + 1   # +=1 for the blank row separator
+
+        buf.seek(0)
+        st.download_button(
+        "📥 Download Weekly Workbook (vertical)",
         data=buf,
         file_name="Simarjit_All_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-   
+)
