@@ -68,64 +68,83 @@ def clean_text(text: str | None) -> str:
     return text.encode("ascii", "ignore").decode("ascii")
 
 
-def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
-    """Generate a pretty PDF summary for the selected week."""
-    pdf = FPDF()
+def generate_pdf(df: pd.DataFrame, title: str = "Weekly Report") -> bytes:
+    """
+    Return a nicely‑formatted PDF (bytes) for the given dataframe.
+    Each row = one daily entry.
+    """
+    pdf = FPDF("P", "mm", "A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Title
-    pdf.set_font("Arial", style="B", size=14)
-    pdf.cell(
-        0,
-        10,
-        clean_text(f"Simarjit Kaur – Weekly Report (Week {week_no})"),
-        ln=True,
-        align="C",
-    )
-    pdf.ln(5)
+    # ---------- header banner ----------
+    pdf.set_fill_color(30, 144, 255)          # light‑blue brand bar
+    pdf.rect(0, 0, 210, 18, style="F")
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_y(6)
+    pdf.cell(0, 6, "Simarjit Kaur – " + title, align="C")
+    pdf.ln(12)
 
-    # One section per day
+    # reset colours for body
+    pdf.set_text_color(0, 0, 0)
+
+    # ---------- iterate rows ----------
     for _, row in df.iterrows():
-        pdf.set_font("Arial", style="B", size=11)
-        pdf.cell(0, 8, clean_text(f"📅 {row['date']}  ({row['Day']})"), ln=True)
 
-        # Try to pretty-print subtasks JSON
+        # date strip
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_fill_color(245, 245, 245)     # light‑grey behind date
+        pdf.cell(0, 8, f"{row['date']}  ({row['Day']})", ln=True, fill=True)
+
+        pdf.set_font("Helvetica", "", 10)
+
+        # completed / incomplete side‑by‑side
+        pdf.multi_cell(0, 6, f"✅ Completed:\n{row['completed_tasks'] or '—'}")
+        pdf.multi_cell(0, 6, f"❌ Incomplete:\n{row['incomplete_tasks'] or '—'}")
+
+        # organizing
+        if row["organizing_details"]:
+            pdf.set_font("Helvetica", "I", 10)
+            pdf.multi_cell(0, 6, "🧹 Organizing Details:")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.multi_cell(0, 6, row["organizing_details"])
+
+        # subtasks block – pretty bullet list
         try:
-            subs_dict = json.loads(row.get("subtasks", "{}"))
-            if isinstance(subs_dict, dict) and subs_dict:
-                subs_text = "\n".join(
-                    f"• {task}:\n    - " + "\n    - ".join(items)
-                    for task, items in subs_dict.items()
-                )
-            else:
-                subs_text = "—"
+            subs = json.loads(row.get("subtasks", "{}") or "{}")
         except Exception:
-            subs_text = "—"
+            subs = {}
+        if subs:
+            pdf.set_font("Helvetica", "I", 10)
+            pdf.multi_cell(0, 6, "📋 Sub‑Tasks:")
+            pdf.set_font("Helvetica", "", 10)
+            for task, items in subs.items():
+                pdf.multi_cell(0, 6, f"• {task}")
+                for it in items:
+                    pdf.multi_cell(0, 6, f"    – {it}")
 
-        pdf.set_font("Arial", size=10)
-        pdf.multi_cell(
-            0,
-            6,
-            clean_text(
-                f"✅ Completed Tasks:\n{row['completed_tasks'] or '—'}\n\n"
-                f"❌ Incomplete Tasks:\n{row['incomplete_tasks'] or '—'}\n\n"
-                f"🧹 Organizing Details:\n{row['organizing_details'] or '—'}\n\n"
-                f"📋 Sub-Tasks:\n{subs_text}\n\n"
-                f"🗒️ Notes:\n{row['notes'] or '—'}"
-            ),
-        )
+        # notes
+        if row["notes"]:
+            pdf.set_font("Helvetica", "I", 10)
+            pdf.multi_cell(0, 6, "🗒️ Notes:")
+            pdf.set_font("Helvetica", "", 10)
+            pdf.multi_cell(0, 6, row["notes"])
 
-        # Divider
-        pdf.ln(1)
+        # divider
+        pdf.ln(2)
+        pdf.set_draw_color(200, 200, 200)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(3)
+        pdf.ln(4)
 
-    # Footer
-    pdf.set_y(-15)
-    pdf.set_font("Arial", "I", 8)
-    pdf.cell(0, 10, f"Page {pdf.page_no()}", 0, 0, "C")
+    # footer
+    pdf.set_y(-12)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.cell(0, 6, f"Generated {datetime.now():%d %b %Y %H:%M}", 0, 0, "L")
+    pdf.cell(0, 6, f"Page {pdf.page_no()}", 0, 0, "R")
 
-    return pdf.output(dest="S").encode("latin1")
+    return pdf.output(dest="S").encode("latin-1")
+
 
 
 # ------------------------------------------------------------------#
