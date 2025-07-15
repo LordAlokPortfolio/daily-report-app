@@ -10,7 +10,7 @@ from __future__ import annotations
 import io, json, sqlite3, unicodedata
 from datetime import datetime
 from pathlib import Path
-
+import xlsxwriter 
 import pandas as pd
 import streamlit as st
 
