@@ -127,22 +127,6 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         pdf.multi_cell(0, 7, clean_text(row["organizing_details"] or "-"))
         pdf.ln(2)
 
-        # Sub-Tasks
-        pdf.cell(0, 7, clean_text("Sub-Tasks:"), ln=True)
-        pdf.set_font("Arial", "", 11)
-        try:
-            subs = json.loads(row["subtasks"] or "{}")
-            if isinstance(subs, dict) and subs:
-                for task, items in subs.items():
-                    if items:
-                        line = f"[x] {task}: {', '.join(items)}"
-                        pdf.multi_cell(0, 7, clean_text(line))
-            else:
-                pdf.multi_cell(0, 7, clean_text("-"))
-        except Exception:
-            pdf.multi_cell(0, 7, clean_text("-"))
-        pdf.ln(5)
-
     # Footer
     pdf.set_y(-15)
     pdf.set_font("Arial", "I", 8)
@@ -324,7 +308,7 @@ with tab_weekly:
                 st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
                 st.rerun()
 
-                
+
     pdf_bytes = generate_pdf(df_clean_disp, 0)
     st.download_button(
         "🖨️ Download PDF",
