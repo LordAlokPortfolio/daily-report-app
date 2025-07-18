@@ -325,32 +325,43 @@ with tab_weekly:
                  "organizing_details","notes"]
     st.dataframe(df_clean_disp[show_cols].reset_index(drop=True), use_container_width=True)
 
-    # --- Delete Rows Section ---
+   # --- Delete Rows Section (hidden by default) ---
+show_delete = st.checkbox("⚙️ Show delete controls", value=False)
+if show_delete:
     st.markdown("---")
     st.subheader("❌ Delete Report Rows")
-    df_display = df_clean.reset_index()
-    df_display["RowLabel"] = (
-        "Row #" + df_display["index"].astype(str)
-        + ": " + df_display["Date"].dt.strftime("%Y-%m-%d")
-        + " (" + df_display["Day"] + ") - " + df_display["name"]
-    )
-    options = [{"label": r["RowLabel"], "value": r["index"]} for _,r in df_display.iterrows()]
-    selected = st.multiselect(
-        "Select rows to delete:",
-        options=[o["value"] for o in options],
-        format_func=lambda i: next(o["label"] for o in options if o["value"]==i)
-    )
-    if st.button("Delete Selected Rows") and selected:
-        to_delete = df_clean.loc[selected]
-        with sqlite3.connect(DB_PATH) as conn:
-            for _,r in to_delete.iterrows():
-                conn.execute(
-                    "DELETE FROM reports WHERE date=? AND day=? AND name=?",
-                    (r["date"],r["day"],r["name"])
-                )
-            conn.commit()
-        st.success(f"Deleted {len(selected)} row(s). Refreshing…")
-        st.rerun()
+    with st.expander("Delete rows by row number"):
+        df_display = df_clean.reset_index()
+        df_display["RowLabel"] = (
+            "Row #"
+            + df_display["index"].astype(str)
+            + ": "
+            + df_display["Date"].dt.strftime("%Y-%m-%d")
+            + " ("
+            + df_display["Day"]
+            + ") – "
+            + df_display["name"]
+        )
+        options = [
+            {"label": r["RowLabel"], "value": r["index"]}
+            for _, r in df_display.iterrows()
+        ]
+        selected = st.multiselect(
+            "Select rows to delete:",
+            options=[o["value"] for o in options],
+            format_func=lambda i: next(o["label"] for o in options if o["value"] == i),
+        )
+        if st.button("Delete Selected Rows") and selected:
+            to_delete = df_clean.loc[selected]
+            with sqlite3.connect(DB_PATH) as conn:
+                for _, r in to_delete.iterrows():
+                    conn.execute(
+                        "DELETE FROM reports WHERE date=? AND day=? AND name=?",
+                        (r["date"], r["day"], r["name"]),
+                    )
+                conn.commit()
+            st.success(f"Deleted {len(selected)} row(s). Refreshing…")
+            st.rerun()
 
     # Excel download
     excel_buf = io.BytesIO()
