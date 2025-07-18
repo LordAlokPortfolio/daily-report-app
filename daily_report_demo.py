@@ -192,7 +192,6 @@ now = datetime.now(ZoneInfo("America/Toronto"))
 hour = now.hour
 
 # Personal greeting based on time of day
-now = datetime.now()
 hour = now.hour
 if hour < 12:
     greet = "Good morning"
