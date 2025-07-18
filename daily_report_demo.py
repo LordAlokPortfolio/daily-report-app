@@ -358,3 +358,23 @@ with tab_weekly:
                     conn.commit()
                 st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
                 st.rerun()
+
+    # --- Excel and PDF Download Buttons ---
+    excel_buf = io.BytesIO()
+    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
+        df_clean_disp.drop(columns=["Week"]).to_excel(writer, sheet_name="All_Reports", index=False)
+    excel_buf.seek(0)
+    st.download_button(
+        "📥 Download Excel",
+        data=excel_buf,
+        file_name="Simarjit_All_Reports.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    pdf_bytes = generate_pdf(df_clean_disp, 0)
+    st.download_button(
+        "🖨️ Download PDF",
+        data=pdf_bytes,
+        file_name="Simarjit_All_Reports.pdf",
+        mime="application/pdf",
+    )
