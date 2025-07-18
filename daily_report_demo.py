@@ -75,7 +75,9 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
     pdf.ln(5)
 
     for _, row in df.iterrows():
-        # Use the parsed datetime column here
+        # Skip rows with missing Date
+        if pd.isna(row["Date"]):
+            continue
         date_str = row["Date"].strftime("%Y-%m-%d")
         day_str = row["Day"]
 
