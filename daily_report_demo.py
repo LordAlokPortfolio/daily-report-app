@@ -282,7 +282,7 @@ def cleanup_bad_data():
         conn.commit()
 
 # Uncomment the next line and run the app ONCE to clean up existing bad data, then comment it again.
-#cleanup_bad_data()
+cleanup_bad_data()
 
 # ------------------------------- TAB 2 ----------------------------#
 with tab_weekly:
