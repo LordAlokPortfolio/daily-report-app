@@ -312,6 +312,27 @@ with tab_weekly:
     # Show all records for all weeks and days
     st.dataframe(df.drop(columns=["Week"]), use_container_width=True)
 
+    # --- Delete Rows Section ---
+    st.markdown("---")
+    st.subheader("❌ Delete Report Rows")
+    with st.expander("Delete rows by date and day"):
+        if not df.empty:
+            df_display = df[["Date", "Day", "name"]].copy()
+            df_display["Date"] = df_display["Date"].dt.strftime("%Y-%m-%d")
+            df_display["Row"] = df_display["Date"] + " (" + df_display["Day"] + ") - " + df_display["name"]
+            options = df_display["Row"].tolist()
+            selected = st.multiselect("Select rows to delete:", options)
+            if st.button("Delete Selected Rows") and selected:
+                to_delete = df_display[df_display["Row"].isin(selected)]
+                with sqlite3.connect(DB_PATH) as conn:
+                    for _, r in to_delete.iterrows():
+                        conn.execute(
+                            "DELETE FROM reports WHERE date = ? AND day = ? AND name = ?",
+                            (r["Date"], r["Day"], r["name"]),
+                        )
+                    conn.commit()
+                st.success(f"Deleted {len(to_delete)} row(s). Please refresh the page to see updates.")
+
     # Excel download (all data)
     excel_buf = io.BytesIO()
     with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
