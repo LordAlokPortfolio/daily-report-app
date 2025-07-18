@@ -24,10 +24,6 @@ from fpdf import FPDF
 # ------------------------------------------------------------------#
 DB_PATH = Path("daily_reports.db")
 
-# show where the DB is for debugging
-import os
-st.info(f"[DEBUG] Database path: {os.path.abspath(DB_PATH)}")
-
 # ------------------------------------------------------------------#
 #                    DATABASE INITIALISATION                        #
 # ------------------------------------------------------------------#
@@ -169,9 +165,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
     pdf.set_font("Arial", "I", 8)
     pdf.cell(0, 10, f"Page {pdf.page_no()}", align="C")
 
-    return pdf.output(dest="S") \
-              .replace("\u2013", "-") \
-              .encode("latin-1")
+    return pdf.output(dest="S").replace(b"\u2013", b"-").encode("latin-1")
 
 # ------------------------------------------------------------------#
 #                       STATIC TASK SCHEDULE                       #
@@ -185,9 +179,42 @@ SCHEDULE: dict[str, list[str]] = {
 }
 
 # ------------------------------------------------------------------#
-#                         STREAMLIT UI                              #
+#                        STREAMLIT LAYOUT                           #
 # ------------------------------------------------------------------#
 st.set_page_config(page_title="Daily Report", layout="wide")
+
+from datetime import datetime
+import random
+
+# Personal greeting based on time of day
+now = datetime.now()
+hour = now.hour
+if hour < 12:
+    greet = "Good morning"
+elif hour < 18:
+    greet = "Good afternoon"
+else:
+    greet = "Good evening"
+
+# Motivational quotes
+quotes = [
+    "Success is the sum of small efforts repeated day in and day out.",
+    "Focus on being productive instead of busy.",
+    "Don't watch the clock; do what it does—keep going.",
+    "Well done is better than well said.",
+    "You don’t have to be great to start, but you have to start to be great."
+]
+quote = random.choice(quotes)
+
+# Render greeting, date/time, and quote
+st.markdown(f"### {greet}, Alok!")
+st.markdown(f"#### Today is {now:%A, %B %d, %Y • %I:%M %p}")
+st.markdown("> _" + quote + "_")
+st.markdown("---")
+
+# Define the two main tabs
+tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
+
 tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
 
 # ------------------------ TAB 1: SUBMIT ---------------------------#
