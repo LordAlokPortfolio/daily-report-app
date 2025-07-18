@@ -192,7 +192,7 @@ tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
 
 # ------------------------ TAB 1: SUBMIT ---------------------------#
 with tab_submit:
-    st.header("Daily Report – Simarjit Kaur")
+    st.header("Daily Report - Simarjit Kaur")
 
     date_sel = st.date_input("Date", datetime.today())
     day_name = date_sel.strftime("%A")
@@ -241,7 +241,7 @@ with tab_submit:
 
                 if not all(flags):
                     reason = st.text_area(
-                        f"❗ Reason (some sub-tasks incomplete) – {task}",
+                        f"❗ Reason (some sub-tasks incomplete) - {task}",
                         key=f"{task}_reason",
                         height=80,
                     )
@@ -256,15 +256,15 @@ with tab_submit:
 
             else:  # task not completed
                 reason = st.text_area(
-                    f"❗ Reason – {task} not completed",
+                    f"❗ Reason - {task} not completed",
                     key=f"{task}_reason",
                     height=80,
                 )
                 incomplete[task] = reason
 
-        notes = st.text_area("🗒️ Notes (optional)", height=80)
+        notes = st.text_area(" Notes (optional)", height=80)
 
-        if st.form_submit_button("✅ Submit Report"):
+        if st.form_submit_button(" Submit Report"):
             if any(not v.strip() for v in incomplete.values()):
                 st.error("All unchecked tasks require a reason.")
                 st.stop()
@@ -286,13 +286,13 @@ with tab_submit:
                         json.dumps(task_subtasks),
                     ),
                 )
-            st.success("✅ Report saved!")
+            st.success(" Report saved!")
 
             # auto‑backup
             from git_autobackup import backup_to_git
             try:
                 backup_to_git(db_path=str(DB_PATH))
-                st.info("🔄 Database backed up to GitHub.")
+                st.info(" Database backed up to GitHub.")
             except Exception as e:
                 st.error(f"Backup failed: {e}")
 
