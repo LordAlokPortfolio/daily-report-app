@@ -54,10 +54,26 @@ init_db()
 #                         HELPER FUNCTIONS                          #
 # ------------------------------------------------------------------#
 def clean_text(text: str | None) -> str:
-    """Strip non-ASCII characters for PDF output."""
+    """Strip non-ASCII characters and emojis for PDF output."""
     if not isinstance(text, str):
         return ""
     text = unicodedata.normalize("NFKD", text)
+    # Remove emojis (unicode ranges for emoticons, symbols, pictographs, etc.)
+    import re
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"  # emoticons
+        "\U0001F300-\U0001F5FF"  # symbols & pictographs
+        "\U0001F680-\U0001F6FF"  # transport & map symbols
+        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
+        "\U00002700-\U000027BF"  # Dingbats
+        "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+        "\U00002600-\U000026FF"  # Misc symbols
+        "\U00002B50-\U00002B55"  # Stars
+        "]+",
+        flags=re.UNICODE,
+    )
+    text = emoji_pattern.sub(r"", text)
     return text.encode("ascii", "ignore").decode("ascii")
 
 
@@ -83,12 +99,12 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
 
         # Date header
         pdf.set_font("Arial", "B", 13)
-        pdf.cell(0, 10, f"{date_str} ({day_str})", ln=True)
+        pdf.cell(0, 10, clean_text(f"{date_str} ({day_str})"), ln=True)
         pdf.ln(2)
 
         # Completed tasks with subtasks and check mark
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, "Completed Tasks:", ln=True)
+        pdf.cell(0, 7, clean_text("Completed Tasks:"), ln=True)
         pdf.set_font("Arial", "", 11)
         completed_tasks = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
         try:
@@ -96,43 +112,43 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         except Exception:
             subs = {}
         for task in completed_tasks:
-            pdf.cell(0, 7, f"✔ {task}", ln=True)
+            pdf.cell(0, 7, clean_text(f"✔ {task}"), ln=True)
             # Show subtasks for this completed task
             items = subs.get(task, []) if isinstance(subs, dict) else []
             for item in items:
                 pdf.cell(10)
-                pdf.multi_cell(0, 7, f"• {item}")
+                pdf.multi_cell(0, 7, clean_text(f"• {item}"))
         if not completed_tasks:
-            pdf.cell(0, 7, "-", ln=True)
+            pdf.cell(0, 7, clean_text("-"), ln=True)
         pdf.ln(1)
 
         # Organizing details (after completed tasks)
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, "Organizing Details:", ln=True)
+        pdf.cell(0, 7, clean_text("Organizing Details:"), ln=True)
         pdf.set_font("Arial", "", 11)
-        pdf.multi_cell(0, 7, row["organizing_details"] or "-")
+        pdf.multi_cell(0, 7, clean_text(row["organizing_details"] or "-"))
         pdf.ln(1)
 
         # Incomplete tasks (only if any subtasks are missing)
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, "Incomplete Tasks:", ln=True)
+        pdf.cell(0, 7, clean_text("Incomplete Tasks:"), ln=True)
         pdf.set_font("Arial", "", 11)
         try:
             inc = json.loads(row["incomplete_tasks"])
             if isinstance(inc, dict) and inc:
                 for task, reason in inc.items():
-                    pdf.multi_cell(0, 7, f"- {task}: {reason}")
+                    pdf.multi_cell(0, 7, clean_text(f"- {task}: {reason}"))
             else:
-                pdf.multi_cell(0, 7, "-")
+                pdf.multi_cell(0, 7, clean_text("-"))
         except Exception:
-            pdf.multi_cell(0, 7, "-")
+            pdf.multi_cell(0, 7, clean_text("-"))
         pdf.ln(1)
 
         # Notes
         pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, "Notes:", ln=True)
+        pdf.cell(0, 7, clean_text("Notes:"), ln=True)
         pdf.set_font("Arial", "", 11)
-        pdf.multi_cell(0, 7, row["notes"] or "-")
+        pdf.multi_cell(0, 7, clean_text(row["notes"] or "-"))
         pdf.ln(3)
 
         # Divider
