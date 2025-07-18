@@ -71,7 +71,8 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
 
     # Title
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 12, f"Simarjit Kaur - Weekly Report (Week {week_no})", ln=True, align="C")
+    title_week = "All Weeks" if week_no == 0 else f"Week {week_no}"
+    pdf.cell(0, 12, f"Simarjit Kaur - Weekly Report ({title_week})", ln=True, align="C")
     pdf.ln(8)
 
     for _, row in df.iterrows():
@@ -281,9 +282,8 @@ def cleanup_bad_data():
         conn.commit()
 
 # Uncomment the next line and run the app ONCE to clean up existing bad data, then comment it again.
-cleanup_bad_data()
+#cleanup_bad_data()
 
-# ------------------------------- TAB 2 ----------------------------#
 # ------------------------------- TAB 2 ----------------------------#
 with tab_weekly:
     st.header("📅 Weekly View")
