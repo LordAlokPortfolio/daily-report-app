@@ -43,10 +43,6 @@ def init_db() -> None:
             )
             """
         )
-        existing_cols = [col[1] for col in conn.execute("PRAGMA table_info(reports)")]
-        if "subtasks" not in existing_cols:
-            conn.execute("ALTER TABLE reports ADD COLUMN subtasks TEXT")
-
 
 init_db()
 
@@ -271,8 +267,7 @@ def cleanup_bad_data():
         )
         conn.commit()
 
-# Uncomment the next line and run the app ONCE to clean up existing bad data, then comment it again.
-#cleanup_bad_data()
+
 
 # ------------------------------- TAB 2 ----------------------------#
 with tab_weekly:
@@ -310,17 +305,10 @@ with tab_weekly:
                   (df["date"].astype(str).str.strip() != "") & (df["day"].astype(str).str.strip() != "") & (df["name"].astype(str).str.strip() != "")]
 
     # Prepare display DataFrame with only relevant columns, no duplicates
-    display_cols = [
-        "date", "day", "name", "completed_tasks", "incomplete_tasks", "organizing_details", "notes", "subtasks", "Date", "Day"
-    ]
-    # Remove duplicate columns: keep only 'Date' and 'Day' (pretty), drop 'date' and 'day' (raw)
-    display_cols = [c for c in display_cols if c not in ("date", "day")]  # remove raw
-    # Add index for row deletion
     df_clean_disp = df_clean.copy()
     df_clean_disp["completed_tasks"] = df_clean_disp.apply(pretty_completed, axis=1)
-    # Only show relevant columns
     show_cols = ["Date", "Day", "name", "completed_tasks", "incomplete_tasks", "organizing_details", "notes"]
-    st.dataframe(df_clean_disp[show_cols].reset_index(), use_container_width=True)
+    st.dataframe(df_clean_disp[show_cols].reset_index(drop=True), use_container_width=True)
 
     # --- Delete Rows Section ---
     st.markdown("---")
