@@ -1,13 +1,15 @@
-'''Streamlit Daily Report App for Simarjit Kaur
+"""
+Streamlit Daily Report App for Simarjit Kaur
 -------------------------------------------
 Creates / reads a SQLite database of daily reports and
 lets the user generate weekly Excel + PDF summaries.
-'''
+"""
 
 from __future__ import annotations
 
 import io
 import json
+import re
 import sqlite3
 import unicodedata
 from datetime import datetime
@@ -22,7 +24,7 @@ from fpdf import FPDF
 # ------------------------------------------------------------------#
 DB_PATH = Path("daily_reports.db")
 
-# Log the absolute path of the database file for debugging
+# show where the DB is for debugging
 import os
 st.info(f"[DEBUG] Using database at: {os.path.abspath(DB_PATH)}")
 
@@ -30,10 +32,9 @@ st.info(f"[DEBUG] Using database at: {os.path.abspath(DB_PATH)}")
 #                    DATABASE INITIALISATION                        #
 # ------------------------------------------------------------------#
 def init_db() -> None:
-    """Create the `reports` table (if absent) and ensure `subtasks` exists."""
+    """Create the `reports` table if it doesn't exist."""
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS reports (
                 date               TEXT,
                 day                TEXT,
@@ -44,8 +45,7 @@ def init_db() -> None:
                 notes              TEXT,
                 subtasks           TEXT
             )
-            """
-        )
+        """)
 
 init_db()
 
@@ -56,66 +56,112 @@ def clean_text(text: str | None) -> str:
     """Strip non-ASCII characters and emojis for PDF output."""
     if not isinstance(text, str):
         return ""
-    text = unicodedata.normalize("NFKD", text)
-    # Remove emojis\    
-    import re
+    txt = unicodedata.normalize("NFKD", text)
+    # remove emoji ranges
     emoji_pattern = re.compile(
-        "["
-        "\U0001F600-\U0001F64F"  # emoticons
-        "\U0001F300-\U0001F5FF"  # symbols & pictographs
-        "\U0001F680-\U0001F6FF"  # transport & map symbols
-        "\U0001F1E0-\U0001F1FF"  # flags (iOS)
-        "\U00002700-\U000027BF"  # Dingbats
-        "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
-        "\U00002600-\U000026FF"  # Misc symbols
-        "\U00002B50-\U00002B55"  # Stars
+        "["                       
+        "\U0001F600-\U0001F64F"  
+        "\U0001F300-\U0001F5FF"  
+        "\U0001F680-\U0001F6FF"  
+        "\U0001F1E0-\U0001F1FF"  
+        "\U00002700-\U000027BF"  
+        "\U0001F900-\U0001F9FF"  
+        "\U00002600-\U000026FF"  
+        "\U00002B50-\U00002B55"  
         "]+",
         flags=re.UNICODE
     )
-    text = emoji_pattern.sub(r"", text)
-    return text.encode("ascii", "ignore").decode("ascii")
-
+    txt = emoji_pattern.sub("", txt)
+    return txt.encode("ascii", "ignore").decode("ascii")
 
 def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
+    """
+    Generate a PDF summary for one ISO‑week (or all weeks if week_no==0),
+    with separators after each day and between weeks.
+    """
     pdf = FPDF()
     pdf.add_page()
-    # … title setup …
 
-    # Keep track of the current ISO‐week if you ever feed it multiple weeks at once
+    # Title
+    pdf.set_font("Arial", "B", 16)
+    title = "All Weeks" if week_no == 0 else f"Week {week_no}"
+    pdf.cell(0, 12, f"Simarjit Kaur – Weekly Report ({title})", ln=True, align="C")
+    pdf.ln(8)
+
     last_week = None
     for _, row in df.iterrows():
-        # If you’re doing “All Weeks” (week_no == 0), insert a week‐separator when the ISO‐week changes
+        # on "All Weeks" PDF, separate weeks
+        this_week = row["Date"].isocalendar().week
         if week_no == 0:
-            this_week = row["Date"].isocalendar().week
             if last_week is not None and this_week != last_week:
                 pdf.ln(5)
-                pdf.set_draw_color(200, 200, 200)
+                pdf.set_draw_color(160, 160, 160)
                 pdf.set_line_width(0.5)
                 pdf.line(10, pdf.get_y(), 200, pdf.get_y())
                 pdf.ln(8)
             last_week = this_week
 
-        # … your per‐day header & tasks …
+        # Day header
         date_str = row["Date"].strftime("%Y-%m-%d")
         day_str  = row["Day"]
         pdf.set_font("Arial", "B", 12)
         pdf.cell(0, 8, clean_text(f"{date_str} ({day_str})"), ln=True)
         pdf.ln(2)
-        # … completed/incomplete/organizing/sub‑tasks …
 
-        # draw a light rule after every day
-        pdf.ln(3)
-        pdf.set_draw_color(200, 200, 200)     # light gray
-        pdf.set_line_width(0.3)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        # Completed Tasks
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 6, clean_text("Completed Tasks:"), ln=True)
+        pdf.set_font("Arial", "", 11)
+        try:
+            completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+        except Exception:
+            completed = []
+        pdf.multi_cell(0, 6, clean_text(", ".join(completed) if completed else "-"))
+        pdf.ln(2)
+
+        # Incomplete Tasks
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 6, clean_text("Incomplete Tasks:"), ln=True)
+        pdf.set_font("Arial", "", 11)
+        pdf.multi_cell(0, 6, clean_text(row.get("incomplete_tasks") or "-"))
+        pdf.ln(2)
+
+        # Organizing Details
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 6, clean_text("Organizing Details:"), ln=True)
+        pdf.set_font("Arial", "", 11)
+        pdf.multi_cell(0, 6, clean_text(row["organizing_details"] or "-"))
+        pdf.ln(2)
+
+        # Sub‑Tasks
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 6, clean_text("Sub-Tasks:"), ln=True)
+        pdf.set_font("Arial", "", 11)
+        try:
+            subs = json.loads(row["subtasks"] or "{}")
+            if isinstance(subs, dict) and subs:
+                for task, items in subs.items():
+                    if items:
+                        line = f"[x] {task}: {', '.join(items)}"
+                        pdf.multi_cell(0, 6, clean_text(line))
+            else:
+                pdf.multi_cell(0, 6, "-")
+        except Exception:
+            pdf.multi_cell(0, 6, "-")
         pdf.ln(5)
 
-    # at the very end of the whole PDF (i.e. after all days/weeks), one more rule
+        # day separator
+        pdf.set_draw_color(200, 200, 200)
+        pdf.set_line_width(0.3)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(8)
+
+    # final week separator
     pdf.ln(5)
-    pdf.set_draw_color(0, 0, 0)               # maybe a darker line for week‐end
+    pdf.set_draw_color(0, 0, 0)
     pdf.set_line_width(0.7)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(5)
+    pdf.ln(8)
 
     # Footer
     pdf.set_y(-15)
@@ -124,27 +170,26 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
 
     return pdf.output(dest="S").encode("latin-1")
 
-
 # ------------------------------------------------------------------#
-#                     SCHEDULE (STATIC SAMPLE)                      #
+#                       STATIC TASK SCHEDULE                       #
 # ------------------------------------------------------------------#
 SCHEDULE: dict[str, list[str]] = {
-    "Monday": ["Stock Screens","Screen Mesh","Spectra","LTC","Organizing Materials"],
-    "Tuesday": ["Vision","RPM Punched","RPM Stainless","Organizing Materials"],
+    "Monday":    ["Stock Screens","Screen Mesh","Spectra","LTC","Organizing Materials"],
+    "Tuesday":   ["Vision","RPM Punched","RPM Stainless","Organizing Materials"],
     "Wednesday": ["SIL Plastic","SIL Fastners","Schelgal","Shop Supplies","Organizing Materials"],
-    "Thursday": ["Amesbury Truth","Twin/Multipoint Keepers","Stock Screens","Foot Locks","Organizing Materials"],
-    "Friday": ["Mini Blinds","Foam Concept","Cardboard","Organizing Materials"],
+    "Thursday":  ["Amesbury Truth","Twin/Multipoint Keepers","Stock Screens","Foot Locks","Organizing Materials"],
+    "Friday":    ["Mini Blinds","Foam Concept","Cardboard","Organizing Materials"],
 }
 
 # ------------------------------------------------------------------#
-#                        STREAMLIT LAYOUT                           #
+#                         STREAMLIT UI                              #
 # ------------------------------------------------------------------#
 st.set_page_config(page_title="Daily Report", layout="wide")
 tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
 
-# TAB 1: Submit
+# TAB 1: Submit Report
 with tab_submit:
-    st.header("Daily Report - Simarjit Kaur")
+    st.header("Daily Report – Simarjit Kaur")
     date_sel = st.date_input("Date", datetime.today())
     day_name = date_sel.strftime("%A")
     tasks = SCHEDULE.get(day_name, [])
@@ -154,8 +199,8 @@ with tab_submit:
 
     with st.form("report_form", clear_on_submit=True):
         completed: list[str] = []
-        incomplete: dict[str, str] = {}
-        task_subtasks: dict[str, list[str]] = {}
+        incomplete: dict[str,str] = {}
+        task_subs: dict[str,list[str]] = {}
         default_subs = [
             "Counted and recorded on Excel",
             "Sent file to managers via email",
@@ -174,31 +219,28 @@ with tab_submit:
                     flags.append(chk)
                     if chk:
                         chosen.append(sub)
-                task_subtasks[task] = chosen
+                task_subs[task] = chosen
 
                 if not all(flags):
-                    reason = st.text_area(
-                        f"❗ Reason – sub‑tasks missing ({task})",
-                        key=f"{task}_reason", height=80
-                    )
+                    reason = st.text_area(f"❗ Reason – sub‑tasks missing ({task})",
+                                          key=f"{task}_reason", height=80)
                     incomplete[task] = reason
 
                 if task == "Organizing Materials":
-                    st.text_area("🧹 Organizing Details", key="organizing_details", height=120)
+                    st.text_area("🧹 Organizing Details",
+                                 key="organizing_details", height=120)
             else:
-                reason = st.text_area(
-                    f"❗ Reason – not done ({task})",
-                    key=f"{task}_reason", height=80
-                )
+                reason = st.text_area(f"❗ Reason – not done ({task})",
+                                      key=f"{task}_reason", height=80)
                 incomplete[task] = reason
 
         notes = st.text_area("🗒️ Notes (optional)", height=80)
 
         if st.form_submit_button("✅ Submit Report"):
-            # validation
             if any(not v.strip() for v in incomplete.values()):
                 st.error("Every unfinished task must have a reason.")
                 st.stop()
+
             with sqlite3.connect(DB_PATH) as conn:
                 conn.execute(
                     "INSERT INTO reports VALUES (?,?,?,?,?,?,?,?)",
@@ -210,7 +252,7 @@ with tab_submit:
                         "All completed" if not incomplete else str(incomplete),
                         st.session_state.get("organizing_details",""),
                         notes,
-                        json.dumps(task_subtasks),
+                        json.dumps(task_subs),
                     ),
                 )
             st.success("✅ Report saved!")
@@ -232,34 +274,66 @@ with tab_weekly:
         st.info("No records found.")
         st.stop()
 
+    # prepare columns
     df["Date"] = pd.to_datetime(df["date"])
     df["Week"] = df["Date"].dt.isocalendar().week
-    df["Day"] = df["Date"].dt.strftime("%A")
+    df["Day"]  = df["Date"].dt.strftime("%A")
 
     def pretty_completed(row):
         try:
-            completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
-            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
+            done = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+            subs = json.loads(row["subtasks"] or "{}")
         except Exception:
-            completed, subs = [], {}
-        if not completed:
+            done, subs = [], {}
+        if not done:
             return "-"
         lines = []
-        for task in completed:
-            lines.append(f"✔ {task}")
-            for item in subs.get(task, []):
-                lines.append(f"    • {item}")
+        for t in done:
+            lines.append(f"✔ {t}")
+            for sub in subs.get(t, []):
+                lines.append(f"    • {sub}")
         return "\n".join(lines)
 
-    df_clean = df[
-        df["date"].notna() & df["day"].notna() & df["name"].notna()
-    ]
+    df_clean = df[(df["date"].notna()) & (df["day"].notna()) & (df["name"].notna())]
     df_clean_disp = df_clean.copy()
     df_clean_disp["completed_tasks"] = df_clean_disp.apply(pretty_completed, axis=1)
-    show_cols = ["Date","Day","name","completed_tasks","incomplete_tasks","organizing_details","notes"]
+
+    show_cols = [
+        "Date","Day","name",
+        "completed_tasks","incomplete_tasks",
+        "organizing_details","notes"
+    ]
     st.dataframe(df_clean_disp[show_cols].reset_index(drop=True), use_container_width=True)
 
-    # Excel & PDF downloads
+    # --- Delete Rows Section ---
+    st.markdown("---")
+    st.subheader("❌ Delete Report Rows")
+    with st.expander("Delete rows by row number"):
+        df_display = df_clean.reset_index()
+        df_display["RowLabel"] = (
+            "Row #" + df_display["index"].astype(str)
+            + ": " + df_display["Date"].dt.strftime("%Y-%m-%d")
+            + " (" + df_display["Day"] + ") - " + df_display["name"]
+        )
+        options = [{"label": r["RowLabel"], "value": r["index"]} for _, r in df_display.iterrows()]
+        selected = st.multiselect(
+            "Select rows to delete:",
+            options=[o["value"] for o in options],
+            format_func=lambda i: next(o["label"] for o in options if o["value"]==i)
+        )
+        if st.button("Delete Selected Rows") and selected:
+            to_delete = df_clean.loc[selected]
+            with sqlite3.connect(DB_PATH) as conn:
+                for _, r in to_delete.iterrows():
+                    conn.execute(
+                        "DELETE FROM reports WHERE date=? AND day=? AND name=?",
+                        (r["date"], r["day"], r["name"])
+                    )
+                conn.commit()
+            st.success(f"Deleted {len(selected)} row(s). Refreshing…")
+            st.rerun()
+
+    # Excel download
     excel_buf = io.BytesIO()
     with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
         df_clean_disp[show_cols].to_excel(writer, sheet_name="All_Reports", index=False)
@@ -268,45 +342,14 @@ with tab_weekly:
         "📥 Download Excel",
         data=excel_buf,
         file_name="Simarjit_All_Reports.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-# --- Delete Rows Section ---
-    st.markdown("---")
-    st.subheader("❌ Delete Report Rows")
-    with st.expander("Delete rows by row number"):
-        if not df_clean.empty:
-            df_display = df_clean.reset_index()
-            df_display["RowLabel"] = "Row #" + df_display["index"].astype(str) + ": " + df_display["Date"].dt.strftime("%Y-%m-%d") + " (" + df_display["Day"] + ") - " + df_display["name"]
-            options = [
-                {"label": row["RowLabel"], "value": row["index"]}
-                for _, row in df_display.iterrows()
-            ]
-            selected = st.multiselect(
-                "Select rows to delete:",
-                options=[opt["value"] for opt in options],
-                format_func=lambda idx: next(opt["label"] for opt in options if opt["value"] == idx)
-            )
-            if st.button("Delete Selected Rows") and selected:
-                to_delete = df.iloc[selected]
-                with sqlite3.connect(DB_PATH) as conn:
-                    for _, r in to_delete.iterrows():
-                        conn.execute(
-                            "DELETE FROM reports WHERE date = ? AND day = ? AND name = ?",
-                            (r["date"], r["day"], r["name"]),
-                        )
-                    conn.commit()
 
-                st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
-                st.rerun()
-
-
-    pdf_bytes = generate_pdf(df_clean_disp, 0)
+    # PDF download (all weeks)
+    pdf_bytes = generate_pdf(df_clean, week_no=0)
     st.download_button(
         "🖨️ Download PDF",
         data=pdf_bytes,
         file_name="Simarjit_All_Reports.pdf",
-        mime="application/pdf",
+        mime="application/pdf"
     )
-# ------------------------------------------------------------------#
-# End of Streamlit app
-# ------------------------------------------------------------------#   
