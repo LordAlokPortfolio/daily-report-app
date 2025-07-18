@@ -295,7 +295,36 @@ with tab_weekly:
         file_name="Simarjit_All_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+# --- Delete Rows Section ---
+    st.markdown("---")
+    st.subheader("❌ Delete Report Rows")
+    with st.expander("Delete rows by row number"):
+        if not df_clean.empty:
+            df_display = df_clean.reset_index()
+            df_display["RowLabel"] = "Row #" + df_display["index"].astype(str) + ": " + df_display["Date"].dt.strftime("%Y-%m-%d") + " (" + df_display["Day"] + ") - " + df_display["name"]
+            options = [
+                {"label": row["RowLabel"], "value": row["index"]}
+                for _, row in df_display.iterrows()
+            ]
+            selected = st.multiselect(
+                "Select rows to delete:",
+                options=[opt["value"] for opt in options],
+                format_func=lambda idx: next(opt["label"] for opt in options if opt["value"] == idx)
+            )
+            if st.button("Delete Selected Rows") and selected:
+                to_delete = df.iloc[selected]
+                with sqlite3.connect(DB_PATH) as conn:
+                    for _, r in to_delete.iterrows():
+                        conn.execute(
+                            "DELETE FROM reports WHERE date = ? AND day = ? AND name = ?",
+                            (r["date"], r["day"], r["name"]),
+                        )
+                    conn.commit()
 
+                st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
+                st.rerun()
+
+                
     pdf_bytes = generate_pdf(df_clean_disp, 0)
     st.download_button(
         "🖨️ Download PDF",
