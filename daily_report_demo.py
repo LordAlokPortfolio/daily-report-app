@@ -6,7 +6,12 @@ lets the user generate weekly Excel + PDF summaries.
 """
 
 from __future__ import annotations
-import io, json, re, sqlite3, unicodedata
+
+import io
+import json
+import re
+import sqlite3
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -19,11 +24,11 @@ from fpdf import FPDF
 # ------------------------------------------------------------------#
 DB_PATH = Path("daily_reports.db")
 
-
 # ------------------------------------------------------------------#
 #                    DATABASE INITIALISATION                        #
 # ------------------------------------------------------------------#
 def init_db() -> None:
+    """Create the `reports` table if it doesn't exist."""
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS reports (
@@ -38,17 +43,17 @@ def init_db() -> None:
             )
         """)
 
-
 init_db()
-
 
 # ------------------------------------------------------------------#
 #                         HELPER FUNCTIONS                          #
 # ------------------------------------------------------------------#
 def clean_text(text: str | None) -> str:
+    """Strip non-ASCII characters (including emojis) for PDF output."""
     if not isinstance(text, str):
         return ""
     txt = unicodedata.normalize("NFKD", text)
+    # remove common emoji/unicode ranges
     emoji_pattern = re.compile(
         "["                       
         "\U0001F600-\U0001F64F"  
@@ -63,14 +68,18 @@ def clean_text(text: str | None) -> str:
         flags=re.UNICODE
     )
     txt = emoji_pattern.sub("", txt)
+    # drop any remaining non-ASCII
     return txt.encode("ascii", "ignore").decode("ascii")
 
-
 def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
+    """
+    Generate a PDF summary for one ISO-week (or all weeks if week_no==0),
+    with separators after each day and between weeks.
+    """
     pdf = FPDF()
     pdf.add_page()
 
-    # Title
+    # Title (use hyphen, not en-dash)
     pdf.set_font("Arial", "B", 16)
     title = "All Weeks" if week_no == 0 else f"Week {week_no}"
     header = clean_text(f"Simarjit Kaur - Weekly Report ({title})")
@@ -79,6 +88,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
 
     last_week = None
     for _, row in df.iterrows():
+        # insert week break if in “All Weeks” view
         this_week = row["Date"].isocalendar().week
         if week_no == 0 and last_week is not None and this_week != last_week:
             pdf.ln(5)
@@ -90,15 +100,19 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
 
         # Day header
         date_str = row["Date"].strftime("%Y-%m-%d")
+        day_str  = row["Day"]
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 8, clean_text(f"{date_str} ({row['Day']})"), ln=True)
+        pdf.cell(0, 8, clean_text(f"{date_str} ({day_str})"), ln=True)
         pdf.ln(2)
 
         # Completed Tasks
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 6, clean_text("Completed Tasks:"), ln=True)
         pdf.set_font("Arial", "", 11)
-        completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+        try:
+            completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+        except Exception:
+            completed = []
         pdf.multi_cell(0, 6, clean_text(", ".join(completed) if completed else "-"))
         pdf.ln(2)
 
@@ -116,17 +130,20 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         pdf.multi_cell(0, 6, clean_text(row["organizing_details"] or "-"))
         pdf.ln(2)
 
-        # Sub‑Tasks
+        # Sub‑Tasks with ASCII “[x] ”
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 6, clean_text("Sub-Tasks:"), ln=True)
         pdf.set_font("Arial", "", 11)
-        subs = json.loads(row["subtasks"] or "{}")
-        if subs:
-            for task, items in subs.items():
-                if items:
-                    line = f"[x] {task}: {', '.join(items)}"
-                    pdf.multi_cell(0, 6, clean_text(line))
-        else:
+        try:
+            subs = json.loads(row["subtasks"] or "{}")
+            if isinstance(subs, dict) and subs:
+                for task, items in subs.items():
+                    if items:
+                        line = f"[x] {task}: {', '.join(items)}"
+                        pdf.multi_cell(0, 6, clean_text(line))
+            else:
+                pdf.multi_cell(0, 6, "-")
+        except Exception:
             pdf.multi_cell(0, 6, "-")
         pdf.ln(5)
 
@@ -136,43 +153,45 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(8)
 
-    # Final separator & footer
+    # Final week separator
     pdf.ln(5)
     pdf.set_draw_color(0, 0, 0)
     pdf.set_line_width(0.7)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(8)
+
+    # Footer
     pdf.set_y(-15)
     pdf.set_font("Arial", "I", 8)
     pdf.cell(0, 10, f"Page {pdf.page_no()}", align="C")
 
-    pdf_str = pdf.output(dest="S")
-    return pdf_str.replace("\u2013", "-").encode("latin-1")
-
+    return pdf.output(dest="S").encode("latin-1")
 
 # ------------------------------------------------------------------#
 #                       STATIC TASK SCHEDULE                       #
 # ------------------------------------------------------------------#
-SCHEDULE = {
-    "Monday":    ["Stock Screens", "Screen Mesh", "Spectra", "LTC", "Organizing Materials"],
-    "Tuesday":   ["Vision", "RPM Punched", "RPM Stainless", "Organizing Materials"],
-    "Wednesday": ["SIL Plastic", "SIL Fastners", "Schelgal", "Shop Supplies", "Organizing Materials"],
-    "Thursday":  ["Amesbury Truth", "Twin/Multipoint Keepers", "Stock Screens", "Foot Locks", "Organizing Materials"],
-    "Friday":    ["Mini Blinds", "Foam Concept", "Cardboard", "Organizing Materials"],
+SCHEDULE: dict[str, list[str]] = {
+    "Monday":    ["Stock Screens","Screen Mesh","Spectra","LTC","Organizing Materials"],
+    "Tuesday":   ["Vision","RPM Punched","RPM Stainless","Organizing Materials"],
+    "Wednesday": ["SIL Plastic","SIL Fastners","Schelgal","Shop Supplies","Organizing Materials"],
+    "Thursday":  ["Amesbury Truth","Twin/Multipoint Keepers","Stock Screens","Foot Locks","Organizing Materials"],
+    "Friday":    ["Mini Blinds","Foam Concept","Cardboard","Organizing Materials"],
 }
-
 
 # ------------------------------------------------------------------#
 #                        STREAMLIT LAYOUT                           #
 # ------------------------------------------------------------------#
 st.set_page_config(page_title="Daily Report", layout="wide")
 
-# Greeting banner
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import random
 
+# Use Toronto local time
 now = datetime.now(ZoneInfo("America/Toronto"))
+hour = now.hour
+
+# Personal greeting based on time of day
 hour = now.hour
 if hour < 12:
     greet = "Good morning"
@@ -181,6 +200,7 @@ elif hour < 18:
 else:
     greet = "Good evening"
 
+# Motivational quotes
 quotes = [
     "Success is the sum of small efforts repeated day in and day out.",
     "Focus on being productive instead of busy.",
@@ -190,13 +210,15 @@ quotes = [
 ]
 quote = random.choice(quotes)
 
+# Render greeting, date/time, and quote
 st.markdown(f"### {greet}, Simarjit Kaur!")
+# Now this will show Toronto’s current date & time
 st.markdown(f"#### Today is {now:%A, %B %d, %Y • %I:%M %p}")
 st.markdown("> _" + quote + "_")
 st.markdown("---")
 
+# Define the two main tabs
 tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
-
 
 # ------------------------ TAB 1: SUBMIT ---------------------------#
 with tab_submit:
@@ -210,8 +232,8 @@ with tab_submit:
 
     with st.form("report_form", clear_on_submit=True):
         completed: list[str] = []
-        incomplete: dict[str, str] = {}
-        task_subs: dict[str, list[str]] = []
+        incomplete: dict[str,str] = {}
+        task_subs: dict[str,list[str]] = {}
         default_subs = [
             "Counted and recorded on Excel",
             "Sent file to managers via email",
@@ -220,7 +242,7 @@ with tab_submit:
         ]
 
         for task in tasks:
-            done = st.radio(f"{task} done?", ["Yes", "No"], key=task, horizontal=True)
+            done = st.radio(f"{task} done?", ["Yes","No"], key=task, horizontal=True)
             if done == "Yes":
                 completed.append(task)
                 flags, chosen = [], []
@@ -233,13 +255,15 @@ with tab_submit:
                 task_subs[task] = chosen
 
                 if not all(flags):
-                    reason = st.text_area(f"❗ Reason – sub‑tasks missing ({task})", key=f"{task}_reason", height=80)
+                    reason = st.text_area(f"❗ Reason – sub‑tasks missing ({task})",
+                                          key=f"{task}_reason", height=80)
                     incomplete[task] = reason
 
                 if task == "Organizing Materials":
                     st.text_area("🧹 Organizing Details", key="organizing_details", height=120)
             else:
-                reason = st.text_area(f"❗ Reason – not done ({task})", key=f"{task}_reason", height=80)
+                reason = st.text_area(f"❗ Reason – not done ({task})",
+                                      key=f"{task}_reason", height=80)
                 incomplete[task] = reason
 
         notes = st.text_area("🗒️ Notes (optional)", height=80)
@@ -256,58 +280,21 @@ with tab_submit:
                         "Simarjit Kaur",
                         ", ".join(completed),
                         "All completed" if not incomplete else str(incomplete),
-                        st.session_state.get("organizing_details", ""),
+                        st.session_state.get("organizing_details",""),
                         notes,
                         json.dumps(task_subs),
                     ),
                 )
             st.success("✅ Report saved!")
             from git_autobackup import backup_to_git
-
             try:
                 backup_to_git(db_path=str(DB_PATH))
                 st.info("🔄 Database backed up to GitHub.")
             except Exception as e:
                 st.error(f"Backup failed: {e}")
 
-
 # ----------------------- TAB 2: WEEKLY VIEW -----------------------#
-with tab_weekly:
-    st.header("📅 Weekly View")
-
-    # Load & preprocess
-    df = pd.read_sql("SELECT * FROM reports", sqlite3.connect(DB_PATH))
-    if df.empty:
-        st.info("No records found.")
-        st.stop()
-
-    df["Date"] = pd.to_datetime(df["date"])
-    df["Week"] = df["Date"].dt.isocalendar().week
-    df["Day"] = df["Date"].dt.strftime("%A")
-
-    def pretty_completed(row):
-        done = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
-        subs = json.loads(row["subtasks"] or "{}")
-        if not done:
-            return "-"
-        lines = []
-        for t in done:
-            lines.append(f"✔ {t}")
-            for sub in subs.get(t, []):
-                lines.append(f"    • {sub}")
-        return "\n".join(lines)
-
-    df_clean = df[df["date"].notna()].copy()
-    df_clean_disp = df_clean.copy()
-    df_clean_disp["completed_tasks"] = df_clean_disp.apply(pretty_completed, axis=1)
-
-    show_cols = [
-        "Date", "Day", "name", "completed_tasks",
-        "incomplete_tasks", "organizing_details", "notes"
-    ]
-    st.dataframe(df_clean_disp[show_cols].reset_index(drop=True), use_container_width=True)
-
-    # Hideable delete section
+ # ─── hideable delete section ─────────────────────────────────────────
     show_delete = st.checkbox("⚙️ Show delete controls", value=False)
     if show_delete:
         st.markdown("---")
@@ -315,11 +302,19 @@ with tab_weekly:
         with st.expander("Delete rows by row number"):
             df_display = df_clean.reset_index()
             df_display["RowLabel"] = (
-                "Row #" + df_display["index"].astype(str)
-                + ": " + df_display["Date"].dt.strftime("%Y-%m-%d")
-                + " (" + df_display["Day"] + ") – " + df_display["name"]
+                "Row #"
+                + df_display["index"].astype(str)
+                + ": "
+                + df_display["Date"].dt.strftime("%Y-%m-%d")
+                + " ("
+                + df_display["Day"]
+                + ") – "
+                + df_display["name"]
             )
-            options = [{"label": r["RowLabel"], "value": r["index"]} for _, r in df_display.iterrows()]
+            options = [
+                {"label": r["RowLabel"], "value": r["index"]}
+                for _, r in df_display.iterrows()
+            ]
             selected = st.multiselect(
                 "Select rows to delete:",
                 options=[o["value"] for o in options],
@@ -337,8 +332,9 @@ with tab_weekly:
                 st.success(f"Deleted {len(selected)} row(s). Refreshing…")
                 st.rerun()
 
-    # Always-visible downloads
+    # ─── always‑visible downloads ─────────────────────────────────────────
     st.markdown("---")
+    # Excel download
     excel_buf = io.BytesIO()
     with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
         df_clean_disp[show_cols].to_excel(writer, sheet_name="All_Reports", index=False)
@@ -350,6 +346,7 @@ with tab_weekly:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
+    # PDF download (all weeks)
     pdf_bytes = generate_pdf(df_clean, week_no=0)
     st.download_button(
         "🖨️ Download PDF",
@@ -357,6 +354,3 @@ with tab_weekly:
         file_name="Simarjit_All_Reports.pdf",
         mime="application/pdf",
     )
-# ------------------------------------------------------------------#
-# End of Streamlit app
-# ------------------------------------------------------------------#
