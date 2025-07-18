@@ -331,7 +331,8 @@ with tab_weekly:
                             (r["Date"], r["Day"], r["name"]),
                         )
                     conn.commit()
-                st.success(f"Deleted {len(to_delete)} row(s). Please refresh the page to see updates.")
+                st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
+                st.rerun()
 
     # Excel download (all data)
     excel_buf = io.BytesIO()
