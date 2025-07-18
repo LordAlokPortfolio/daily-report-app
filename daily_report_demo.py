@@ -317,11 +317,17 @@ with tab_weekly:
         if not df_clean.empty:
             df_display = df_clean.reset_index()
             df_display["RowLabel"] = "Row #" + df_display["index"].astype(str) + ": " + df_display["Date"].dt.strftime("%Y-%m-%d") + " (" + df_display["Day"] + ") - " + df_display["name"]
-            options = df_display["RowLabel"].tolist()
-            selected = st.multiselect("Select rows to delete:", options)
+            options = [
+                {"label": row["RowLabel"], "value": row["index"]}
+                for _, row in df_display.iterrows()
+            ]
+            selected = st.multiselect(
+                "Select rows to delete:",
+                options=[opt["value"] for opt in options],
+                format_func=lambda idx: next(opt["label"] for opt in options if opt["value"] == idx)
+            )
             if st.button("Delete Selected Rows") and selected:
-                selected_indices = [int(label.split()[1].split(":")[0]) for label in selected]
-                to_delete = df.iloc[selected_indices]
+                to_delete = df.iloc[selected]
                 with sqlite3.connect(DB_PATH) as conn:
                     for _, r in to_delete.iterrows():
                         conn.execute(
