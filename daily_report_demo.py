@@ -77,55 +77,45 @@ def clean_text(text: str | None) -> str:
 
 
 def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
-    """
-    Create a PDF summary for one ISO week, using row['Date'] (datetime)
-    so we can call strftime without errors.
-    """
     pdf = FPDF()
     pdf.add_page()
+    # … title setup …
 
-    # Title
-    pdf.set_font("Arial", "B", 16)
-    title_week = "All Weeks" if week_no == 0 else f"Week {week_no}"
-    pdf.cell(0, 12, f"Simarjit Kaur - Weekly Report ({title_week})", ln=True, align="C")
-    pdf.ln(8)
-
+    # Keep track of the current ISO‐week if you ever feed it multiple weeks at once
+    last_week = None
     for _, row in df.iterrows():
-        if pd.isna(row["Date"]):
-            continue
+        # If you’re doing “All Weeks” (week_no == 0), insert a week‐separator when the ISO‐week changes
+        if week_no == 0:
+            this_week = row["Date"].isocalendar().week
+            if last_week is not None and this_week != last_week:
+                pdf.ln(5)
+                pdf.set_draw_color(200, 200, 200)
+                pdf.set_line_width(0.5)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(8)
+            last_week = this_week
+
+        # … your per‐day header & tasks …
         date_str = row["Date"].strftime("%Y-%m-%d")
-        day_str = row["Day"]
-
-        # Date header
-        pdf.set_font("Arial", "B", 13)
-        pdf.cell(0, 10, clean_text(f"{date_str}  ({day_str})"), ln=True)
+        day_str  = row["Day"]
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 8, clean_text(f"{date_str} ({day_str})"), ln=True)
         pdf.ln(2)
+        # … completed/incomplete/organizing/sub‑tasks …
 
-        # Completed Tasks
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, clean_text("Completed Tasks:"), ln=True)
-        pdf.set_font("Arial", "", 11)
-        try:
-            completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
-        except Exception:
-            completed = []
-        pdf.multi_cell(0, 7, clean_text(", ".join(completed) if completed else "-"))
-        pdf.ln(1)
+        # draw a light rule after every day
+        pdf.ln(3)
+        pdf.set_draw_color(200, 200, 200)     # light gray
+        pdf.set_line_width(0.3)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(5)
 
-        # Incomplete Tasks
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, clean_text("Incomplete Tasks:"), ln=True)
-        pdf.set_font("Arial", "", 11)
-        incomplete = row.get("incomplete_tasks", "")
-        pdf.multi_cell(0, 7, clean_text(incomplete if incomplete else "-"))
-        pdf.ln(1)
-
-        # Organizing Details
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, clean_text("Organizing Details:"), ln=True)
-        pdf.set_font("Arial", "", 11)
-        pdf.multi_cell(0, 7, clean_text(row["organizing_details"] or "-"))
-        pdf.ln(2)
+    # at the very end of the whole PDF (i.e. after all days/weeks), one more rule
+    pdf.ln(5)
+    pdf.set_draw_color(0, 0, 0)               # maybe a darker line for week‐end
+    pdf.set_line_width(0.7)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(5)
 
     # Footer
     pdf.set_y(-15)
@@ -133,6 +123,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
     pdf.cell(0, 10, f"Page {pdf.page_no()}", align="C")
 
     return pdf.output(dest="S").encode("latin-1")
+
 
 # ------------------------------------------------------------------#
 #                     SCHEDULE (STATIC SAMPLE)                      #
