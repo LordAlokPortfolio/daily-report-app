@@ -313,8 +313,28 @@ with tab_weekly:
     df_clean = df[(df["date"].notna()) & (df["day"].notna()) & (df["name"].notna()) &
                   (df["date"].astype(str).str.strip() != "") & (df["day"].astype(str).str.strip() != "") & (df["name"].astype(str).str.strip() != "")]
 
-    # Show all records for all weeks and days (with index)
-    st.dataframe(df_clean.drop(columns=["Week"]).reset_index(), use_container_width=True)
+    # Add pretty completed tasks + subtasks column for display
+    def pretty_completed(row):
+        try:
+            completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
+        except Exception:
+            completed = []
+            subs = {}
+        if not completed:
+            return "-"
+        lines = []
+        for task in completed:
+            lines.append(f"✔ {task}")
+            items = subs.get(task, []) if isinstance(subs, dict) else []
+            for item in items:
+                lines.append(f" • {item}")
+        return "\n".join(lines)
+
+    df_clean_disp = df_clean.copy()
+    df_clean_disp["Completed Tasks (✓ + Subtasks)"] = df_clean_disp.apply(pretty_completed, axis=1)
+    # Show all records for all weeks and days (with index and pretty completed tasks)
+    st.dataframe(df_clean_disp.drop(columns=["Week"]).reset_index(), use_container_width=True)
 
     # --- Delete Rows Section ---
     st.markdown("---")
