@@ -1,4 +1,3 @@
-#TEST
 """
 Streamlit Daily Report App for Simarjit Kaur
 -------------------------------------------
