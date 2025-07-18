@@ -225,6 +225,14 @@ with tab_submit:
         notes = st.text_area("🗒️ Notes (optional)", height=80)
 
         if st.form_submit_button("✅ Submit Report"):
+            # Validation: ensure all required fields are present
+            required_fields = [date_sel, day_name, "Simarjit Kaur", completed, incomplete]
+            if any(
+                (isinstance(f, str) and not f.strip()) or (isinstance(f, list) and not f) or (isinstance(f, dict) and not f and f != {})
+                for f in required_fields
+            ):
+                st.error("All required fields (date, day, name, completed/incomplete tasks) must be filled.")
+                st.stop()
             if any(not v.strip() for v in incomplete.values()):
                 st.error("Every unfinished task must have a reason.")
                 st.stop()
@@ -253,6 +261,26 @@ with tab_submit:
                 st.info("🔄 Database backed up to GitHub.")
             except Exception as e:
                 st.error(f"Backup failed: {e}")
+
+# ------------------------------------------------------------------#
+#                CLEANUP SCRIPT FOR BAD DATA (ONE-TIME)             #
+# ------------------------------------------------------------------#
+def cleanup_bad_data():
+    """Remove rows from the database where date, day, or name is NULL or empty."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            DELETE FROM reports
+            WHERE date IS NULL OR TRIM(date) = ''
+               OR day IS NULL OR TRIM(day) = ''
+               OR name IS NULL OR TRIM(name) = ''
+            """
+        )
+        conn.commit()
+
+# Uncomment the next line and run the app ONCE to clean up existing bad data, then comment it again.
+# cleanup_bad_data()
 
 # ------------------------------- TAB 2 ----------------------------#
 # ------------------------------- TAB 2 ----------------------------#
