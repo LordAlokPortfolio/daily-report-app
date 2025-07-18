@@ -202,12 +202,12 @@ quotes = [
     "Focus on being productive instead of busy.",
     "Don't watch the clock; do what it does—keep going.",
     "Well done is better than well said.",
-    "You don’t have to be great to start, but you have to start to be great."
+    "You don't have to be great to start, but you have to start to be great."
 ]
 quote = random.choice(quotes)
 
 # Render greeting, date/time, and quote
-st.markdown(f"### {greet}, Alok!")
+st.markdown(f"### {greet}, Simarjit Kaur!")
 st.markdown(f"#### Today is {now:%A, %B %d, %Y • %I:%M %p}")
 st.markdown("> _" + quote + "_")
 st.markdown("---")
