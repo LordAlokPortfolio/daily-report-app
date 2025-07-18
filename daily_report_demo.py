@@ -217,7 +217,7 @@ tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
 
 # ------------------------ TAB 1: SUBMIT ---------------------------#
 with tab_submit:
-    st.header("Daily Report – Simarjit Kaur")
+    st.header("Daily Report")
     date_sel = st.date_input("Date", datetime.today())
     day_name = date_sel.strftime("%A")
     tasks = SCHEDULE.get(day_name, [])
