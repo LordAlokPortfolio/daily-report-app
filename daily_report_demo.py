@@ -363,6 +363,8 @@ if show_delete:
             st.success(f"Deleted {len(selected)} row(s). Refreshing…")
             st.rerun()
 
+    # ---- Always‐visible download buttons ----
+    st.markdown("---")
     # Excel download
     excel_buf = io.BytesIO()
     with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
