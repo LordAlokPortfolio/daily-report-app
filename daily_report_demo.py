@@ -223,6 +223,7 @@ tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
 # ------------------------ TAB 1: SUBMIT ---------------------------#
 with tab_submit:
     st.header("Daily Report")
+
     date_sel = st.date_input("Date", datetime.today())
     day_name = date_sel.strftime("%A")
     tasks = SCHEDULE.get(day_name, [])
@@ -232,8 +233,8 @@ with tab_submit:
 
     with st.form("report_form", clear_on_submit=True):
         completed: list[str] = []
-        incomplete: dict[str,str] = {}
-        task_subs: dict[str,list[str]] = {}
+        incomplete: dict[str, str] = {}
+        task_subs: dict[str, list[str]] = {}
         default_subs = [
             "Counted and recorded on Excel",
             "Sent file to managers via email",
@@ -242,7 +243,7 @@ with tab_submit:
         ]
 
         for task in tasks:
-            done = st.radio(f"{task} done?", ["Yes","No"], key=task, horizontal=True)
+            done = st.radio(f"{task} done?", ["Yes", "No"], key=task, horizontal=True)
             if done == "Yes":
                 completed.append(task)
                 flags, chosen = [], []
@@ -255,22 +256,30 @@ with tab_submit:
                 task_subs[task] = chosen
 
                 if not all(flags):
-                    reason = st.text_area(f"❗ Reason – sub‑tasks missing ({task})",
-                                          key=f"{task}_reason", height=80)
+                    reason = st.text_area(
+                        f"❗ Reason – sub‑tasks missing ({task})",
+                        key=f"{task}_reason",
+                        height=80,
+                    )
                     incomplete[task] = reason
 
                 if task == "Organizing Materials":
                     st.text_area("🧹 Organizing Details", key="organizing_details", height=120)
             else:
-                reason = st.text_area(f"❗ Reason – not done ({task})",
-                                      key=f"{task}_reason", height=80)
+                reason = st.text_area(
+                    f"❗ Reason – not done ({task})",
+                    key=f"{task}_reason",
+                    height=80,
+                )
                 incomplete[task] = reason
 
         notes = st.text_area("🗒️ Notes (optional)", height=80)
+
         if st.form_submit_button("✅ Submit Report"):
             if any(not v.strip() for v in incomplete.values()):
                 st.error("Every unfinished task must have a reason.")
                 st.stop()
+
             with sqlite3.connect(DB_PATH) as conn:
                 conn.execute(
                     "INSERT INTO reports VALUES (?,?,?,?,?,?,?,?)",
@@ -280,7 +289,7 @@ with tab_submit:
                         "Simarjit Kaur",
                         ", ".join(completed),
                         "All completed" if not incomplete else str(incomplete),
-                        st.session_state.get("organizing_details",""),
+                        st.session_state.get("organizing_details", ""),
                         notes,
                         json.dumps(task_subs),
                     ),
@@ -294,7 +303,42 @@ with tab_submit:
                 st.error(f"Backup failed: {e}")
 
 # ----------------------- TAB 2: WEEKLY VIEW -----------------------#
- # ─── hideable delete section ─────────────────────────────────────────
+with tab_weekly:
+    st.header("📅 Weekly View")
+
+    # Load & preprocess
+    df = pd.read_sql("SELECT * FROM reports", sqlite3.connect(DB_PATH))
+    if df.empty:
+        st.info("No records found.")
+        st.stop()
+
+    df["Date"] = pd.to_datetime(df["date"])
+    df["Week"] = df["Date"].dt.isocalendar().week
+    df["Day"]  = df["Date"].dt.strftime("%A")
+
+    def pretty_completed(row):
+        done = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+        subs = json.loads(row["subtasks"] or "{}")
+        if not done:
+            return "-"
+        lines = []
+        for t in done:
+            lines.append(f"✔ {t}")
+            for sub in subs.get(t, []):
+                lines.append(f"    • {sub}")
+        return "\n".join(lines)
+
+    df_clean = df[df["date"].notna()].copy()
+    df_clean_disp = df_clean.copy()
+    df_clean_disp["completed_tasks"] = df_clean_disp.apply(pretty_completed, axis=1)
+
+    show_cols = [
+        "Date", "Day", "name", "completed_tasks",
+        "incomplete_tasks", "organizing_details", "notes"
+    ]
+    st.dataframe(df_clean_disp[show_cols].reset_index(drop=True), use_container_width=True)
+
+    # Hideable delete section
     show_delete = st.checkbox("⚙️ Show delete controls", value=False)
     if show_delete:
         st.markdown("---")
@@ -302,14 +346,9 @@ with tab_submit:
         with st.expander("Delete rows by row number"):
             df_display = df_clean.reset_index()
             df_display["RowLabel"] = (
-                "Row #"
-                + df_display["index"].astype(str)
-                + ": "
-                + df_display["Date"].dt.strftime("%Y-%m-%d")
-                + " ("
-                + df_display["Day"]
-                + ") – "
-                + df_display["name"]
+                "Row #" + df_display["index"].astype(str)
+                + ": " + df_display["Date"].dt.strftime("%Y-%m-%d")
+                + " (" + df_display["Day"] + ") – " + df_display["name"]
             )
             options = [
                 {"label": r["RowLabel"], "value": r["index"]}
@@ -332,9 +371,8 @@ with tab_submit:
                 st.success(f"Deleted {len(selected)} row(s). Refreshing…")
                 st.rerun()
 
-    # ─── always‑visible downloads ─────────────────────────────────────────
+    # Always-visible downloads
     st.markdown("---")
-    # Excel download
     excel_buf = io.BytesIO()
     with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
         df_clean_disp[show_cols].to_excel(writer, sheet_name="All_Reports", index=False)
@@ -346,7 +384,6 @@ with tab_submit:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-    # PDF download (all weeks)
     pdf_bytes = generate_pdf(df_clean, week_no=0)
     st.download_button(
         "🖨️ Download PDF",
@@ -354,3 +391,6 @@ with tab_submit:
         file_name="Simarjit_All_Reports.pdf",
         mime="application/pdf",
     )
+# ------------------------------------------------------------------#
+# End of Streamlit app
+# ------------------------------------------------------------------#
