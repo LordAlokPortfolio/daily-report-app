@@ -21,7 +21,7 @@ from fpdf import FPDF
 # ------------------------------------------------------------------#
 #                             CONFIG                                #
 # ------------------------------------------------------------------#
-DB_PATH = Path(r"M:\ALOK\Daily Reports\daily_reports.db")
+DB_PATH = Path("daily_reports.db")
 
 # ------------------------------------------------------------------#
 #                    DATABASE INITIALISATION                        #
