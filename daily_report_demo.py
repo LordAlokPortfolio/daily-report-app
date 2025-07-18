@@ -271,6 +271,14 @@ with tab_submit:
                 )
             st.success("✅ Report saved!")
 
+            # auto‑backup
+            from git_autobackup import backup_to_git
+            try:
+            backup_to_git(db_path=str(DB_PATH))
+            st.info("🔄 Database backed up to GitHub.")
+            except Exception as e:
+            st.error(f"Backup failed: {e}")
+
 # ----------------------- TAB 2: WEEKLY VIEW -----------------------#
 with tab_weekly:
     st.header("📅 Weekly Reports")
