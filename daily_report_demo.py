@@ -253,6 +253,7 @@ with tab_submit:
                 st.error(f"Backup failed: {e}")
 
 # ------------------------------- TAB 2 ----------------------------#
+# ------------------------------- TAB 2 ----------------------------#
 with tab_weekly:
     st.header("📅 Weekly View")
 
@@ -265,9 +266,14 @@ with tab_weekly:
     df["Date"] = pd.to_datetime(df["date"])
     df["Week"] = df["Date"].dt.isocalendar().week
     df["Day"] = df["Date"].dt.strftime("%A")
-    df["subtasks"] = df["subtasks"].apply(
-        lambda x: json.dumps(json.loads(x or "{}"), indent=1)
-    )
+
+    def safe_json_pretty(x):
+        try:
+            return json.dumps(json.loads(x or "{}"), indent=1)
+        except Exception:
+            return "{}"
+
+    df["subtasks"] = df["subtasks"].apply(safe_json_pretty)
 
     # Filters
     col1, col2 = st.columns(2)
