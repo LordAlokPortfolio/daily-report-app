@@ -71,7 +71,7 @@ def clean_text(text: str | None) -> str:
         "\U00002600-\U000026FF"  # Misc symbols
         "\U00002B50-\U00002B55"  # Stars
         "]+",
-        flags=re.UNICODE,
+        flags=re.UNICODE
     )
     text = emoji_pattern.sub(r"", text)
     return text.encode("ascii", "ignore").decode("ascii")
@@ -102,24 +102,25 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         pdf.cell(0, 10, clean_text(f"{date_str} ({day_str})"), ln=True)
         pdf.ln(2)
 
-        # Completed tasks with subtasks and check mark
+        # Completed tasks with subtasks and check mark (use pretty_completed logic)
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 7, clean_text("Completed Tasks:"), ln=True)
         pdf.set_font("Arial", "", 11)
-        completed_tasks = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
         try:
-            subs = json.loads(row["subtasks"])
+            completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
         except Exception:
+            completed = []
             subs = {}
-        for task in completed_tasks:
-            pdf.cell(0, 7, clean_text(f"✔ {task}"), ln=True)
-            # Show subtasks for this completed task
-            items = subs.get(task, []) if isinstance(subs, dict) else []
-            for item in items:
-                pdf.cell(10)
-                pdf.multi_cell(0, 7, clean_text(f"• {item}"))
-        if not completed_tasks:
+        if not completed:
             pdf.cell(0, 7, clean_text("-"), ln=True)
+        else:
+            for task in completed:
+                pdf.cell(0, 7, clean_text(f"✔ {task}"), ln=True)
+                items = subs.get(task, []) if isinstance(subs, dict) else []
+                for item in items:
+                    pdf.cell(10)
+                    pdf.multi_cell(0, 7, clean_text(f"• {item}"))
         pdf.ln(1)
 
         # Organizing details (after completed tasks)
@@ -129,32 +130,6 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         pdf.multi_cell(0, 7, clean_text(row["organizing_details"] or "-"))
         pdf.ln(1)
 
-        # Incomplete tasks (only if any subtasks are missing)
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, clean_text("Incomplete Tasks:"), ln=True)
-        pdf.set_font("Arial", "", 11)
-        try:
-            inc = json.loads(row["incomplete_tasks"])
-            if isinstance(inc, dict) and inc:
-                for task, reason in inc.items():
-                    pdf.multi_cell(0, 7, clean_text(f"- {task}: {reason}"))
-            else:
-                pdf.multi_cell(0, 7, clean_text("-"))
-        except Exception:
-            pdf.multi_cell(0, 7, clean_text("-"))
-        pdf.ln(1)
-
-        # Notes
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, clean_text("Notes:"), ln=True)
-        pdf.set_font("Arial", "", 11)
-        pdf.multi_cell(0, 7, clean_text(row["notes"] or "-"))
-        pdf.ln(3)
-
-        # Divider
-        y = pdf.get_y()
-        pdf.set_draw_color(150, 150, 150)
-        pdf.line(10, y, 200, y)
         pdf.ln(5)
 
     # Footer
@@ -163,8 +138,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
     pdf.cell(0, 10, f"Page {pdf.page_no()}", align="C")
 
     return pdf.output(dest="S").encode("latin-1")
-
-
+    
 # ------------------------------------------------------------------#
 #                     SCHEDULE (STATIC SAMPLE)                      #
 # ------------------------------------------------------------------#
@@ -314,28 +288,10 @@ with tab_weekly:
     df["Week"] = df["Date"].dt.isocalendar().week
     df["Day"] = df["Date"].dt.strftime("%A")
 
-    def safe_json_pretty(x):
-        try:
-            # Only pretty-print if it's valid JSON dict/list, else return as string
-            val = x or "{}"
-            obj = json.loads(val)
-            return json.dumps(obj, indent=1)
-        except Exception:
-            return "{}"
-
-    # Save original subtasks JSON for use in PDF and table
-    df["subtasks_json"] = df["subtasks"]
-    df["subtasks"] = df["subtasks"].apply(safe_json_pretty)
-
-    # Filter out rows with empty date, day, or name
-    df_clean = df[(df["date"].notna()) & (df["day"].notna()) & (df["name"].notna()) &
-                  (df["date"].astype(str).str.strip() != "") & (df["day"].astype(str).str.strip() != "") & (df["name"].astype(str).str.strip() != "")]
-
-    # Overwrite the completed_tasks column to show check marks and subtasks
     def pretty_completed(row):
         try:
             completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
-            subs = json.loads(row["subtasks_json"]) if row["subtasks_json"] else {}
+            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
         except Exception:
             completed = []
             subs = {}
@@ -349,9 +305,22 @@ with tab_weekly:
                 lines.append(f" • {item}")
         return "\n".join(lines)
 
+    # Filter out rows with empty date, day, or name
+    df_clean = df[(df["date"].notna()) & (df["day"].notna()) & (df["name"].notna()) &
+                  (df["date"].astype(str).str.strip() != "") & (df["day"].astype(str).str.strip() != "") & (df["name"].astype(str).str.strip() != "")]
+
+    # Prepare display DataFrame with only relevant columns, no duplicates
+    display_cols = [
+        "date", "day", "name", "completed_tasks", "incomplete_tasks", "organizing_details", "notes", "subtasks", "Date", "Day"
+    ]
+    # Remove duplicate columns: keep only 'Date' and 'Day' (pretty), drop 'date' and 'day' (raw)
+    display_cols = [c for c in display_cols if c not in ("date", "day")]  # remove raw
+    # Add index for row deletion
     df_clean_disp = df_clean.copy()
     df_clean_disp["completed_tasks"] = df_clean_disp.apply(pretty_completed, axis=1)
-    st.dataframe(df_clean_disp.drop(columns=["Week", "subtasks_json"]).reset_index(), use_container_width=True)
+    # Only show relevant columns
+    show_cols = ["Date", "Day", "name", "completed_tasks", "incomplete_tasks", "organizing_details", "notes"]
+    st.dataframe(df_clean_disp[show_cols].reset_index(), use_container_width=True)
 
     # --- Delete Rows Section ---
     st.markdown("---")
@@ -374,23 +343,3 @@ with tab_weekly:
                     conn.commit()
                 st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
                 st.rerun()
-
-    # --- Excel and PDF Download Buttons ---
-    excel_buf = io.BytesIO()
-    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-        df_clean_disp.drop(columns=["Week"]).to_excel(writer, sheet_name="All_Reports", index=False)
-    excel_buf.seek(0)
-    st.download_button(
-        "📥 Download Excel",
-        data=excel_buf,
-        file_name="Simarjit_All_Reports.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-    pdf_bytes = generate_pdf(df_clean_disp, 0)
-    st.download_button(
-        "🖨️ Download PDF",
-        data=pdf_bytes,
-        file_name="Simarjit_All_Reports.pdf",
-        mime="application/pdf",
-    )
