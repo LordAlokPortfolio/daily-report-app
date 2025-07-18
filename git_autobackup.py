@@ -8,7 +8,7 @@ def backup_to_git(db_path="daily_reports.db"):
     2. Stage the DB
     3. Commit if there are changes
     4. Fetch & rebase remote changes
-    5. Push to GitHub via tokenized URL
+    5. Push to GitHub via tokenized URL (main:main)
     """
     # 1. Git author
     subprocess.run(["git", "config", "user.name", os.environ["GIT_USER"]], check=True)
@@ -22,7 +22,7 @@ def backup_to_git(db_path="daily_reports.db"):
         print("🔔 No new DB changes to back up.")
         return
 
-    commit_msg = f"Auto‑backup: {datetime.now():%Y‑%m‑%d %H:%M:%S}"
+    commit_msg = f"Auto-backup: {datetime.now():%Y-%m-%d %H:%M:%S}"
     subprocess.run(["git", "commit", "-m", commit_msg], check=True)
 
     # 4. Build tokenized URL
@@ -31,13 +31,12 @@ def backup_to_git(db_path="daily_reports.db"):
         repo += ".git"
     token_url = repo.replace("https://", f"https://{os.environ['GIT_TOKEN']}@")
 
-    # 5. Grab any new remote commits and rebase
+    # 5. Fetch & rebase remote changes
     subprocess.run(["git", "fetch", token_url, "main"], check=True)
-    # rebase local HEAD onto remote/main
     subprocess.run(["git", "rebase", "FETCH_HEAD"], check=True)
 
-    # 6. Push your commit on top
-    subprocess.run(["git", "push", token_url, "HEAD:main"], check=True)
+    # 6. Push your commit on top, explicitly main:main
+    subprocess.run(["git", "push", token_url, "main:main"], check=True)
     print("🔄 Backup pushed to GitHub.")
 
 if __name__ == "__main__":
