@@ -269,7 +269,10 @@ with tab_weekly:
 
     def safe_json_pretty(x):
         try:
-            return json.dumps(json.loads(x or "{}"), indent=1)
+            # Only pretty-print if it's valid JSON dict/list, else return as string
+            val = x or "{}"
+            obj = json.loads(val)
+            return json.dumps(obj, indent=1)
         except Exception:
             return "{}"
 
@@ -278,7 +281,9 @@ with tab_weekly:
     # Filters
     col1, col2 = st.columns(2)
     week_no = col1.number_input("Select Week #", 1, 53, int(df["Week"].max()))
-    day_filter = col2.selectbox("Select Day", ["All"] + sorted(df["Day"].unique()))
+    # Remove NaN/None and ensure all are strings for sorting
+    day_options = [str(d) for d in df["Day"].unique() if pd.notna(d)]
+    day_filter = col2.selectbox("Select Day", ["All"] + sorted(day_options))
 
     df_week = df[df["Week"] == week_no]
     if day_filter != "All":
