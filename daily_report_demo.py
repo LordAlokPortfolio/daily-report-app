@@ -215,8 +215,6 @@ st.markdown("---")
 # Define the two main tabs
 tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
 
-tab_submit, tab_weekly = st.tabs(["📝 Submit Report", "📅 Weekly View"])
-
 # ------------------------ TAB 1: SUBMIT ---------------------------#
 with tab_submit:
     st.header("Daily Report – Simarjit Kaur")
