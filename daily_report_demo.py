@@ -307,19 +307,19 @@ with tab_weekly:
         except Exception:
             return "{}"
 
+    # Save original subtasks JSON for use in PDF and table
+    df["subtasks_json"] = df["subtasks"]
     df["subtasks"] = df["subtasks"].apply(safe_json_pretty)
 
     # Filter out rows with empty date, day, or name
     df_clean = df[(df["date"].notna()) & (df["day"].notna()) & (df["name"].notna()) &
                   (df["date"].astype(str).str.strip() != "") & (df["day"].astype(str).str.strip() != "") & (df["name"].astype(str).str.strip() != "")]
 
-    # Add pretty completed tasks + subtasks column for display
+    # Overwrite the completed_tasks column to show check marks and subtasks
     def pretty_completed(row):
         try:
             completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
-            # Use the original subtasks JSON from the database, not the pretty-printed version
-            raw_subtasks = df.loc[row.name, "subtasks"] if "subtasks" in df.columns else "{}"
-            subs = json.loads(raw_subtasks) if raw_subtasks else {}
+            subs = json.loads(row["subtasks_json"]) if row["subtasks_json"] else {}
         except Exception:
             completed = []
             subs = {}
@@ -334,9 +334,8 @@ with tab_weekly:
         return "\n".join(lines)
 
     df_clean_disp = df_clean.copy()
-    df_clean_disp["Completed Tasks (✓ + Subtasks)"] = df_clean_disp.apply(pretty_completed, axis=1)
-    # Show all records for all weeks and days (with index and pretty completed tasks)
-    st.dataframe(df_clean_disp.drop(columns=["Week"]).reset_index(), use_container_width=True)
+    df_clean_disp["completed_tasks"] = df_clean_disp.apply(pretty_completed, axis=1)
+    st.dataframe(df_clean_disp.drop(columns=["Week", "subtasks_json"]).reset_index(), use_container_width=True)
 
     # --- Delete Rows Section ---
     st.markdown("---")
@@ -359,24 +358,3 @@ with tab_weekly:
                     conn.commit()
                 st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
                 st.rerun()
-
-    # Excel download (all data)
-    excel_buf = io.BytesIO()
-    with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-        df.drop(columns=["Week"]).to_excel(writer, sheet_name="All_Reports", index=False)
-    excel_buf.seek(0)
-    st.download_button(
-        "📥 Download Excel",
-        data=excel_buf,
-        file_name="Simarjit_All_Reports.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
-
-    # PDF download (all data, use week_no as 0 for label)
-    pdf_bytes = generate_pdf(df, 0)
-    st.download_button(
-        "🖨️ Download PDF",
-        data=pdf_bytes,
-        file_name="Simarjit_All_Reports.pdf",
-        mime="application/pdf",
-    )
