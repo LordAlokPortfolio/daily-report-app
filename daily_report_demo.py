@@ -202,11 +202,11 @@ else:
 
 # Motivational quotes
 quotes = [
-    "Success is the sum of small efforts repeated day in and day out.",
-    "Focus on being productive instead of busy.",
-    "Don't watch the clock; do what it does—keep going.",
-    "Well done is better than well said.",
-    "You don't have to be great to start, but you have to start to be great."
+    "Le succès est la somme de petits efforts, répétés jour après jour.",
+    "Concentre-toi sur la productivité, pas sur l’activité.",
+    "Ne regarde pas l’horloge ; fais comme elle : avance.",
+    "Mieux vaut bien faire que bien dire.",
+    "Il ne faut pas être parfait pour commencer, mais il faut commencer pour être parfait."
 ]
 quote = random.choice(quotes)
 
