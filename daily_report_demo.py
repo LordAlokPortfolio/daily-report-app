@@ -125,22 +125,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         pdf.multi_cell(0, 7, clean_text(row["organizing_details"] or "-"))
         pdf.ln(2)
 
-        # Sub-Tasks Section
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, clean_text("Sub-Tasks:"), ln=True)
-        pdf.ln(1)
-        try:
-            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
-        except Exception:
-            subs = {}
-        for task in completed:
-            pdf.set_font("Arial", "B", 11)
-            pdf.cell(0, 7, clean_text(f"{task}:") , ln=True)
-            pdf.set_font("Arial", "", 11)
-            items = subs.get(task, []) if isinstance(subs, dict) else []
-            for item in items:
-                pdf.cell(10)
-                pdf.cell(0, 7, clean_text(f"- {item}"), ln=True)
+        # ...Sub-Tasks section removed as requested...
         pdf.ln(5)
 
     # Footer
