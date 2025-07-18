@@ -69,64 +69,81 @@ def clean_text(text: str | None) -> str:
 
 
 def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
-    """Generate a pretty PDF summary for the selected week."""
     pdf = FPDF()
     pdf.add_page()
 
     # Title
-    pdf.set_font("Arial", style="B", size=14)
-    pdf.cell(
-        0,
-        10,
-        clean_text(f"Simarjit Kaur – Weekly Report (Week {week_no})"),
-        ln=True,
-        align="C",
-    )
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, f"Simarjit Kaur - Weekly Report (Week {week_no})", ln=True, align="C")
     pdf.ln(5)
 
-    # One section per day
     for _, row in df.iterrows():
-        pdf.set_font("Arial", style="B", size=11)
-        pdf.cell(0, 8, clean_text(f"📅 {row['date']}  ({row['Day']})"), ln=True)
+        date_str = row["date"].strftime("%Y-%m-%d")
+        day_str  = row["Day"]
 
-        # Try to pretty-print subtasks JSON
+        # Date header
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 8, f"{date_str} ({day_str})", ln=True)
+        pdf.ln(2)
+
+        pdf.set_font("Arial", "", 11)
+        # Completed tasks
+        pdf.cell(0, 6, "Completed Tasks:", ln=True)
+        pdf.multi_cell(0, 6, row["completed_tasks"] or "-")
+        pdf.ln(2)
+
+        # Incomplete tasks
+        pdf.cell(0, 6, "Incomplete Tasks:", ln=True)
         try:
-            subs_dict = json.loads(row.get("subtasks", "{}"))
-            if isinstance(subs_dict, dict) and subs_dict:
-                subs_text = "\n".join(
-                    f"• {task}:\n    - " + "\n    - ".join(items)
-                    for task, items in subs_dict.items()
-                )
+            inc = json.loads(row["incomplete_tasks"])
+            if isinstance(inc, dict) and inc:
+                for task, reason in inc.items():
+                    pdf.multi_cell(0, 6, f"- {task}: {reason}")
             else:
-                subs_text = "—"
+                pdf.multi_cell(0, 6, "-")
         except Exception:
-            subs_text = "—"
+            pdf.multi_cell(0, 6, "-")
+        pdf.ln(2)
 
-        pdf.set_font("Arial", size=10)
-        pdf.multi_cell(
-            0,
-            6,
-            clean_text(
-                f"✅ Completed Tasks:\n{row['completed_tasks'] or '—'}\n\n"
-                f"❌ Incomplete Tasks:\n{row['incomplete_tasks'] or '—'}\n\n"
-                f"🧹 Organizing Details:\n{row['organizing_details'] or '—'}\n\n"
-                f"📋 Sub-Tasks:\n{subs_text}\n\n"
-                f"🗒️ Notes:\n{row['notes'] or '—'}"
-            ),
-        )
+        # Organizing details
+        pdf.cell(0, 6, "Organizing Details:", ln=True)
+        pdf.multi_cell(0, 6, row["organizing_details"] or "-")
+        pdf.ln(2)
+
+        # Sub‑tasks
+        pdf.cell(0, 6, "Sub-Tasks:", ln=True)
+        try:
+            subs = json.loads(row["subtasks"])
+            if isinstance(subs, dict) and subs:
+                for task, items in subs.items():
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 6, f"{task}:", ln=True)
+                    pdf.set_font("Arial", "", 11)
+                    for item in items:
+                        pdf.multi_cell(0, 6, f"   - {item}")
+                    pdf.ln(1)
+            else:
+                pdf.multi_cell(0, 6, "-")
+        except Exception:
+            pdf.multi_cell(0, 6, "-")
+        pdf.ln(2)
+
+        # Notes
+        pdf.cell(0, 6, "Notes:", ln=True)
+        pdf.multi_cell(0, 6, row["notes"] or "-")
+        pdf.ln(5)
 
         # Divider
-        pdf.ln(1)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(3)
+        y = pdf.get_y()
+        pdf.line(10, y, 200, y)
+        pdf.ln(5)
 
-    # Footer
+    # Footer with page number
     pdf.set_y(-15)
     pdf.set_font("Arial", "I", 8)
-    pdf.cell(0, 10, f"Page {pdf.page_no()}", 0, 0, "C")
+    pdf.cell(0, 10, f"Page {pdf.page_no()}", align="C")
 
-    return pdf.output(dest="S").encode("latin1")
-
+    return pdf.output(dest="S").encode("latin-1")
 
 # ------------------------------------------------------------------#
 #                     SCHEDULE (STATIC SAMPLE)                      #
