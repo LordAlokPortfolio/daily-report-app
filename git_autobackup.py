@@ -6,9 +6,18 @@ from datetime import datetime
 
 def backup_to_git(db_path="daily_reports.db"):
     """
-    Stages the SQLite DB, commits with a timestamp, and pushes
-    back to GitHub using a token‑authenticated URL.
+    0. Sync down any remote commits (rebase local on top)
+    1. Configure author
+    2. Stage the SQLite DB
+    3. Commit with timestamp if there are changes
+    4. Push back to GitHub via tokenized URL
     """
+    # 0. Pull & rebase to incorporate upstream changes
+    subprocess.run(
+        ["git", "pull", "--rebase", "origin", "main"],
+        check=True,
+    )
+
     # 1. Configure author
     subprocess.run(
         ["git", "config", "user.name", os.environ["GIT_USER"]],
@@ -23,11 +32,11 @@ def backup_to_git(db_path="daily_reports.db"):
     subprocess.run(["git", "add", db_path], check=True)
 
     # 3. Only commit if there are staged changes
-    status = subprocess.run(
+    result = subprocess.run(
         ["git", "diff", "--staged", "--quiet"],
         check=False,
-    ).returncode
-    if status == 0:
+    )
+    if result.returncode == 0:
         # no changes to commit
         print("🔔 No new changes to back up.")
         return
@@ -41,7 +50,6 @@ def backup_to_git(db_path="daily_reports.db"):
         "https://",
         f"https://{os.environ['GIT_TOKEN']}@"
     )
-    # you can optionally specify the branch: HEAD:main
     subprocess.run(
         ["git", "push", repo_url, "HEAD:main"],
         check=True,
