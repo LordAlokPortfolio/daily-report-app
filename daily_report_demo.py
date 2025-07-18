@@ -317,7 +317,9 @@ with tab_weekly:
     def pretty_completed(row):
         try:
             completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
-            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
+            # Use the original subtasks JSON from the database, not the pretty-printed version
+            raw_subtasks = df.loc[row.name, "subtasks"] if "subtasks" in df.columns else "{}"
+            subs = json.loads(raw_subtasks) if raw_subtasks else {}
         except Exception:
             completed = []
             subs = {}
