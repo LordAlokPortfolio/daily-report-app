@@ -297,7 +297,7 @@ with tab_weekly:
             lines.append(f"✔ {task}")
             items = subs.get(task, []) if isinstance(subs, dict) else []
             for item in items:
-                lines.append(f" • {item}")
+                lines.append(f"    • {item}")
         return "\n".join(lines)
 
     # Filter out rows with empty date, day, or name
