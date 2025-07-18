@@ -309,26 +309,30 @@ with tab_weekly:
 
     df["subtasks"] = df["subtasks"].apply(safe_json_pretty)
 
-    # Show all records for all weeks and days
-    st.dataframe(df.drop(columns=["Week"]), use_container_width=True)
+    # Filter out rows with empty date, day, or name
+    df_clean = df[(df["date"].notna()) & (df["day"].notna()) & (df["name"].notna()) &
+                  (df["date"].astype(str).str.strip() != "") & (df["day"].astype(str).str.strip() != "") & (df["name"].astype(str).str.strip() != "")]
+
+    # Show all records for all weeks and days (with index)
+    st.dataframe(df_clean.drop(columns=["Week"]).reset_index(), use_container_width=True)
 
     # --- Delete Rows Section ---
     st.markdown("---")
     st.subheader("❌ Delete Report Rows")
-    with st.expander("Delete rows by date and day"):
-        if not df.empty:
-            df_display = df[["Date", "Day", "name"]].copy()
-            df_display["Date"] = df_display["Date"].dt.strftime("%Y-%m-%d")
-            df_display["Row"] = df_display["Date"] + " (" + df_display["Day"] + ") - " + df_display["name"]
-            options = df_display["Row"].tolist()
+    with st.expander("Delete rows by row number"):
+        if not df_clean.empty:
+            df_display = df_clean.reset_index()
+            df_display["RowLabel"] = "Row #" + df_display["index"].astype(str) + ": " + df_display["Date"].dt.strftime("%Y-%m-%d") + " (" + df_display["Day"] + ") - " + df_display["name"]
+            options = df_display["RowLabel"].tolist()
             selected = st.multiselect("Select rows to delete:", options)
             if st.button("Delete Selected Rows") and selected:
-                to_delete = df_display[df_display["Row"].isin(selected)]
+                selected_indices = [int(label.split()[1].split(":")[0]) for label in selected]
+                to_delete = df.iloc[selected_indices]
                 with sqlite3.connect(DB_PATH) as conn:
                     for _, r in to_delete.iterrows():
                         conn.execute(
                             "DELETE FROM reports WHERE date = ? AND day = ? AND name = ?",
-                            (r["Date"], r["Day"], r["name"]),
+                            (r["date"], r["day"], r["name"]),
                         )
                     conn.commit()
                 st.success(f"Deleted {len(to_delete)} row(s). Table will refresh.")
