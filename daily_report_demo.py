@@ -184,7 +184,12 @@ SCHEDULE: dict[str, list[str]] = {
 st.set_page_config(page_title="Daily Report", layout="wide")
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import random
+
+# Use Toronto local time
+now = datetime.now(ZoneInfo("America/Toronto"))
+hour = now.hour
 
 # Personal greeting based on time of day
 now = datetime.now()
@@ -208,6 +213,7 @@ quote = random.choice(quotes)
 
 # Render greeting, date/time, and quote
 st.markdown(f"### {greet}, Simarjit Kaur!")
+# Now this will show Toronto’s current date & time
 st.markdown(f"#### Today is {now:%A, %B %d, %Y • %I:%M %p}")
 st.markdown("> _" + quote + "_")
 st.markdown("---")
