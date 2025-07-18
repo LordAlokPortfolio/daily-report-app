@@ -23,6 +23,10 @@ from fpdf import FPDF
 # ------------------------------------------------------------------#
 DB_PATH = Path("daily_reports.db")
 
+# Log the absolute path of the database file for debugging
+import os
+st.info(f"[DEBUG] Using database at: {os.path.abspath(DB_PATH)}")
+
 # ------------------------------------------------------------------#
 #                    DATABASE INITIALISATION                        #
 # ------------------------------------------------------------------#
