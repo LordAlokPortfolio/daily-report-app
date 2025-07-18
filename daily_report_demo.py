@@ -85,14 +85,34 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
         pdf.cell(0, 10, f"{date_str} ({day_str})", ln=True)
         pdf.ln(2)
 
-        # Completed tasks
+        # Completed tasks with subtasks and check mark
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 7, "Completed Tasks:", ln=True)
         pdf.set_font("Arial", "", 11)
-        pdf.multi_cell(0, 7, row["completed_tasks"] or "-")
+        completed_tasks = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
+        try:
+            subs = json.loads(row["subtasks"])
+        except Exception:
+            subs = {}
+        for task in completed_tasks:
+            pdf.cell(0, 7, f"✔ {task}", ln=True)
+            # Show subtasks for this completed task
+            items = subs.get(task, []) if isinstance(subs, dict) else []
+            for item in items:
+                pdf.cell(10)
+                pdf.multi_cell(0, 7, f"• {item}")
+        if not completed_tasks:
+            pdf.cell(0, 7, "-", ln=True)
         pdf.ln(1)
 
-        # Incomplete tasks
+        # Organizing details (after completed tasks)
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 7, "Organizing Details:", ln=True)
+        pdf.set_font("Arial", "", 11)
+        pdf.multi_cell(0, 7, row["organizing_details"] or "-")
+        pdf.ln(1)
+
+        # Incomplete tasks (only if any subtasks are missing)
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 7, "Incomplete Tasks:", ln=True)
         pdf.set_font("Arial", "", 11)
@@ -101,34 +121,6 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
             if isinstance(inc, dict) and inc:
                 for task, reason in inc.items():
                     pdf.multi_cell(0, 7, f"- {task}: {reason}")
-            else:
-                pdf.multi_cell(0, 7, "-")
-        except Exception:
-            pdf.multi_cell(0, 7, "-")
-        pdf.ln(1)
-
-        # Organizing details
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, "Organizing Details:", ln=True)
-        pdf.set_font("Arial", "", 11)
-        pdf.multi_cell(0, 7, row["organizing_details"] or "-")
-        pdf.ln(1)
-
-        # Sub‑tasks
-        pdf.set_font("Arial", "B", 11)
-        pdf.cell(0, 7, "Sub-Tasks:", ln=True)
-        pdf.set_font("Arial", "", 11)
-        try:
-            subs = json.loads(row["subtasks"])
-            if isinstance(subs, dict) and subs:
-                for task, items in subs.items():
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 7, f"  {task}:", ln=True)
-                    pdf.set_font("Arial", "", 11)
-                    for item in items:
-                        pdf.cell(10)  # Indent
-                        pdf.multi_cell(0, 7, f"• {item}")
-                    pdf.ln(1)
             else:
                 pdf.multi_cell(0, 7, "-")
         except Exception:
