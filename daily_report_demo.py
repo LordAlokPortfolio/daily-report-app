@@ -165,7 +165,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
     pdf.set_font("Arial", "I", 8)
     pdf.cell(0, 10, f"Page {pdf.page_no()}", align="C")
 
-    return pdf.output(dest="S").replace(b"\u2013", b"-").encode("latin-1")
+    return pdf.output(dest="S").encode("latin-1")
 
 # ------------------------------------------------------------------#
 #                       STATIC TASK SCHEDULE                       #
