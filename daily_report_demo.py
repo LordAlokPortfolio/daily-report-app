@@ -87,6 +87,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
     pdf.cell(0, 12, f"Simarjit Kaur - Weekly Report ({title_week})", ln=True, align="C")
     pdf.ln(8)
 
+
     for _, row in df.iterrows():
         if pd.isna(row["Date"]):
             continue
@@ -95,37 +96,51 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
 
         # Date header
         pdf.set_font("Arial", "B", 13)
-        pdf.cell(0, 10, clean_text(f"{date_str} ({day_str})"), ln=True)
+        pdf.cell(0, 10, clean_text(f"{date_str}  ({day_str})"), ln=True)
         pdf.ln(2)
 
-        # Completed tasks with subtasks and check mark (use pretty_completed logic)
+        # Completed Tasks
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 7, clean_text("Completed Tasks:"), ln=True)
         pdf.set_font("Arial", "", 11)
         try:
             completed = [t.strip() for t in (row["completed_tasks"] or "").split(",") if t.strip()]
-            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
         except Exception:
             completed = []
-            subs = {}
-        if not completed:
-            pdf.cell(0, 7, clean_text("-"), ln=True)
-        else:
-            for task in completed:
-                pdf.cell(0, 7, clean_text(f"✔ {task}"), ln=True)
-                items = subs.get(task, []) if isinstance(subs, dict) else []
-                for item in items:
-                    pdf.cell(10)
-                    pdf.multi_cell(0, 7, clean_text(f"• {item}"))
+        pdf.multi_cell(0, 7, clean_text(", ".join(completed) if completed else "-"))
         pdf.ln(1)
 
-        # Organizing details (after completed tasks)
+        # Incomplete Tasks
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 7, clean_text("Incomplete Tasks:"), ln=True)
+        pdf.set_font("Arial", "", 11)
+        incomplete = row.get("incomplete_tasks", "")
+        pdf.multi_cell(0, 7, clean_text(incomplete if incomplete else "-"))
+        pdf.ln(1)
+
+        # Organizing Details
         pdf.set_font("Arial", "B", 11)
         pdf.cell(0, 7, clean_text("Organizing Details:"), ln=True)
         pdf.set_font("Arial", "", 11)
         pdf.multi_cell(0, 7, clean_text(row["organizing_details"] or "-"))
-        pdf.ln(1)
+        pdf.ln(2)
 
+        # Sub-Tasks Section
+        pdf.set_font("Arial", "B", 11)
+        pdf.cell(0, 7, clean_text("Sub-Tasks:"), ln=True)
+        pdf.ln(1)
+        try:
+            subs = json.loads(row["subtasks"]) if row["subtasks"] else {}
+        except Exception:
+            subs = {}
+        for task in completed:
+            pdf.set_font("Arial", "B", 11)
+            pdf.cell(0, 7, clean_text(f"{task}:") , ln=True)
+            pdf.set_font("Arial", "", 11)
+            items = subs.get(task, []) if isinstance(subs, dict) else []
+            for item in items:
+                pdf.cell(10)
+                pdf.cell(0, 7, clean_text(f"- {item}"), ln=True)
         pdf.ln(5)
 
     # Footer
@@ -253,19 +268,19 @@ with tab_submit:
 # ------------------------------------------------------------------#
 #                CLEANUP SCRIPT FOR BAD DATA (ONE-TIME)             #
 # ------------------------------------------------------------------#
-def cleanup_bad_data():
-    """Remove rows from the database where date, day, or name is NULL or empty."""
-    with sqlite3.connect(DB_PATH) as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """
-            DELETE FROM reports
-            WHERE date IS NULL OR TRIM(date) = ''
-               OR day IS NULL OR TRIM(day) = ''
-               OR name IS NULL OR TRIM(name) = ''
-            """
-        )
-        conn.commit()
+# def cleanup_bad_data():
+#     """Remove rows from the database where date, day, or name is NULL or empty."""
+#     with sqlite3.connect(DB_PATH) as conn:
+#         cur = conn.cursor()
+#         cur.execute(
+#             """
+#             DELETE FROM reports
+#             WHERE date IS NULL OR TRIM(date) = ''
+#                OR day IS NULL OR TRIM(day) = ''
+#                OR name IS NULL OR TRIM(name) = ''
+#             """
+#         )
+#         conn.commit() 
 
 
 
