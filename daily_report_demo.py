@@ -278,36 +278,26 @@ with tab_weekly:
 
     df["subtasks"] = df["subtasks"].apply(safe_json_pretty)
 
-    # Filters
-    col1, col2 = st.columns(2)
-    week_no = col1.number_input("Select Week #", 1, 53, int(df["Week"].max()))
-    # Remove NaN/None and ensure all are strings for sorting
-    day_options = [str(d) for d in df["Day"].unique() if pd.notna(d)]
-    day_filter = col2.selectbox("Select Day", ["All"] + sorted(day_options))
+    # Show all records for all weeks and days
+    st.dataframe(df.drop(columns=["Week"]), use_container_width=True)
 
-    df_week = df[df["Week"] == week_no]
-    if day_filter != "All":
-        df_week = df_week[df_week["Day"] == day_filter]
-
-    st.dataframe(df_week.drop(columns=["Week"]), use_container_width=True)
-
-    # Excel download
+    # Excel download (all data)
     excel_buf = io.BytesIO()
     with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-        df_week.drop(columns=["Week"]).to_excel(writer, sheet_name=f"Week{week_no}", index=False)
+        df.drop(columns=["Week"]).to_excel(writer, sheet_name="All_Reports", index=False)
     excel_buf.seek(0)
     st.download_button(
         "📥 Download Excel",
         data=excel_buf,
-        file_name=f"Simarjit_Week{week_no}_Report.xlsx",
+        file_name="Simarjit_All_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
-    # PDF download
-    pdf_bytes = generate_pdf(df_week, week_no)
+    # PDF download (all data, use week_no as 0 for label)
+    pdf_bytes = generate_pdf(df, 0)
     st.download_button(
         "🖨️ Download PDF",
         data=pdf_bytes,
-        file_name=f"Simarjit_Week{week_no}_Report.pdf",
+        file_name="Simarjit_All_Reports.pdf",
         mime="application/pdf",
     )
