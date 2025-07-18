@@ -380,7 +380,7 @@ with tab_weekly:
     st.download_button(
         "📥 Download Excel",
         data=excel_buf,
-        file_name="Simarjit_All_Reports.xlsx",
+        file_name="Simarjit_Kaur_Weekly_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
@@ -388,7 +388,7 @@ with tab_weekly:
     st.download_button(
         "🖨️ Download PDF",
         data=pdf_bytes,
-        file_name="Simarjit_All_Reports.pdf",
+        file_name="Simarjit_Kaur_Weekly_Reports.pdf",
         mime="application/pdf",
     )
 # ------------------------------------------------------------------#
