@@ -1,5 +1,5 @@
 """
-Streamlit Daily Report App for Simarjit Kaur
+Streamlit Daily Report App for Rohita Smith
 -------------------------------------------
 Creates / reads a SQLite database of daily reports and
 lets the user generate weekly Excel + PDF summaries.
@@ -82,7 +82,7 @@ def generate_pdf(df: pd.DataFrame, week_no: int) -> bytes:
     # Title (use hyphen, not en-dash)
     pdf.set_font("Arial", "B", 16)
     title = "All Weeks" if week_no == 0 else f"Week {week_no}"
-    header = clean_text(f"Simarjit Kaur - Weekly Report ({title})")
+    header = clean_text(f"Rohita Smith - Weekly Report ({title})")
     pdf.cell(0, 12, header, ln=True, align="C")
     pdf.ln(8)
 
@@ -200,21 +200,11 @@ elif hour < 18:
 else:
     greet = "Good evening"
 
-# Motivational quotes
-quotes = [
-    "Le succès est la somme de petits efforts, répétés jour après jour.",
-    "Concentre-toi sur la productivité, pas sur l’activité.",
-    "Ne regarde pas l’horloge ; fais comme elle : avance.",
-    "Mieux vaut bien faire que bien dire.",
-    "Il ne faut pas être parfait pour commencer, mais il faut commencer pour être parfait."
-]
-quote = random.choice(quotes)
 
 # Render greeting, date/time, and quote
-st.markdown(f"### {greet}, Simarjit Kaur!")
+st.markdown(f"### {greet}, Rohita Smith!")
 # Now this will show Toronto’s current date & time
 st.markdown(f"#### Today is {now:%A, %B %d, %Y • %I:%M %p}")
-st.markdown("> _" + quote + "_")
 st.markdown("---")
 
 # Define the two main tabs
@@ -286,7 +276,7 @@ with tab_submit:
                     (
                         date_sel.strftime("%Y-%m-%d"),
                         day_name,
-                        "Simarjit Kaur",
+                        "Rohita Smith",
                         ", ".join(completed),
                         "All completed" if not incomplete else str(incomplete),
                         st.session_state.get("organizing_details", ""),
@@ -380,7 +370,7 @@ with tab_weekly:
     st.download_button(
         "📥 Download Excel",
         data=excel_buf,
-        file_name="Simarjit_Kaur_Weekly_Reports.xlsx",
+        file_name="Rohita_Smith_Weekly_Reports.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
@@ -388,7 +378,7 @@ with tab_weekly:
     st.download_button(
         "🖨️ Download PDF",
         data=pdf_bytes,
-        file_name="Simarjit_Kaur_Weekly_Reports.pdf",
+        file_name="Rohita_Smith_Weekly_Reports.pdf",
         mime="application/pdf",
     )
 # ------------------------------------------------------------------#
